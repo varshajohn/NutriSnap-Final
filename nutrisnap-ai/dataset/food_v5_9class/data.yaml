@@ -1,0 +1,13 @@
+train: ../train/images
+val: ../valid/images
+test: ../test/images
+
+nc: 14
+names: ['Rice', 'biryani', 'burger', 'cabbage', 'chapathi', 'cheesecake', 'chocolatecake', 'fries', 'milk', 'omelette', 'onion', 'orange', 'pasta', 'tomato']
+
+roboflow:
+  workspace: varsha-0rr8x
+  project: nutrisnap-food-detection2
+  version: 3
+  license: CC BY 4.0
+  url: https://universe.roboflow.com/varsha-0rr8x/nutrisnap-food-detection2/dataset/3

@@ -1,0 +1,42 @@
+{
+  "user": {
+    "id": "u1",
+    "name": "Alisha Mariyam Ajith",
+    "email": "alisha@example.com",
+    "age": 21,
+    "height": "165 cm",
+    "weight": "58 kg",
+    "goal": "Maintain Weight",
+    "avatar": "https://www.pngmart.com/files/23/Profile-PNG-Photo.png",
+    "allergies": ["Peanuts", "Shellfish", "Gluten"],
+    "conditions": ["Lactose Intolerance", "Diabetes Type 2"]
+  },
+  "todaySummary": {
+    "calories": 850,
+    "protein": 45,
+    "carbs": 120,
+    "fats": 30
+  },
+  "diary": [
+    {
+      "title": "Today, October 26",
+      "data": [
+        { "id": "1", "name": "Chicken Salad", "calories": 350, "protein": 30, "carbs": 10, "fats": 20, "time": "1:15 PM", "imageUrl": "https://thesubversivetable.com/wp-content/uploads/2023/02/Korean-Fried-Chicken-Salad-with-Persimmon-Vinegar-2-scaled.jpg" },
+        { "id": "2", "name": "Apple", "calories": 95, "protein": 1, "carbs": 25, "fats": 0, "time": "9:30 AM", "imageUrl": "https://images.pexels.com/photos/102104/pexels-photo-102104.jpeg?auto=compress&cs=tinysrgb&w=1260&h=750&dpr=1" }
+      ]
+    },
+    {
+      "title": "Yesterday, October 25",
+      "data": [
+        { "id": "3", "name": "Pizza Slice", "calories": 285, "protein": 12, "carbs": 36, "fats": 10, "time": "7:00 PM", "imageUrl": "https://images.pexels.com/photos/1146760/pexels-photo-1146760.jpeg?auto=compress&cs=tinysrgb&w=1260&h=750&dpr=1" },
+        { "id": "4", "name": "Oats with Berries", "calories": 250, "protein": 10, "carbs": 45, "fats": 5, "time": "8:00 AM", "imageUrl": "https://www.vnutritionandwellness.com/wp-content/uploads/2022/07/vegan-overnight-oats-with-toppings.jpg" }
+      ]
+    },
+    {
+      "title": "October 24",
+      "data": [
+          { "id": "5", "name": "Grilled Salmon", "calories": 450, "protein": 40, "carbs": 5, "fats": 30, "time": "8:15 PM", "imageUrl": "https://images.pexels.com/photos/3763847/pexels-photo-3763847.jpeg?auto=compress&cs=tinysrgb&w=1260&h=750&dpr=1"}
+      ]
+    }
+  ]
+}
