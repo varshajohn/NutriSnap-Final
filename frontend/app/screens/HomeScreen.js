@@ -220,8 +220,8 @@ const HomeScreen = ({ userId }) => {
         {/* 5. TOOLS */}
         <Text style={styles.sectionTitle}>Smart Tools</Text>
         <View style={styles.toolGrid}>
-          <ToolCard icon="camera" label="AI Snap" onPress={() => navigation.navigate('Camera')} />
-          <ToolCard icon="barcode-scan" label="Barcode" onPress={() => navigation.navigate('Scan')} />
+          <ToolCard icon="camera" label="AI Snap" onPress={() => navigation.navigate('Camera', { userId })} />
+          <ToolCard icon="barcode-scan" label="Barcode" onPress={() => navigation.navigate('Scan', { userId })} />
           <ToolCard icon="robot-happy" label="AI Coach" onPress={() => navigation.navigate('Chat')} />
         </View>
 

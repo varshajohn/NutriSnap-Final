@@ -5,7 +5,10 @@ import { View, StyleSheet, TouchableOpacity, Text, Button } from 'react-native';
 import { CameraView, useCameraPermissions } from 'expo-camera';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 
-const CameraScreen = ({ navigation }) => {
+const CameraScreen = ({ navigation, route }) => {
+
+  const userId = route.params?.userId;
+
   const [permission, requestPermission] = useCameraPermissions();
   const cameraRef = useRef(null);
 
@@ -51,11 +54,13 @@ const CameraScreen = ({ navigation }) => {
 
     const data = await response.json();
 
-    console.log("Detection result:", data);
+console.log("FULL API RESPONSE:", data);
+console.log("FIRST DETECTION:", data.detections?.[0]);
 
-    navigation.navigate("DetectionResult", {
-      detections: data.detections,
-    });
+navigation.navigate("DetectionResult", {
+  detections: data.detections,
+  userId: userId
+});
 
   } catch (error) {
     console.error("Detection error:", error);

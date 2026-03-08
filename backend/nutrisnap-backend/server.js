@@ -358,19 +358,140 @@ app.post("/api/detect-food", upload.single("image"), (req, res) => {
     try {
       const detections = JSON.parse(stdout);
 
-      const enrichedDetections = detections.map(d => ({
-        label: d.label,
-        confidence: d.confidence,
-        nutrition: nutritionData[d.label] || null
-      }));
+const enrichedDetections = detections.map(d => {
+  const key = d.label.toLowerCase().trim();
 
-      res.json({ detections: enrichedDetections });
+  return {
+    label: d.label,
+    confidence: d.confidence,
+    nutrition: nutritionData[key] || null
+  };
+});
 
+res.json({ detections: enrichedDetections });
     } catch (e) {
       console.error("Invalid Python output:", stdout);
       res.status(500).json({ error: "Invalid model output" });
     }
   });
+});
+
+/* -------------------- 🧠 FOOD RECOMMENDATION ENGINE -------------------- */
+app.post("/api/recommend-food", async (req, res) => {
+  try {
+
+    const { userId, food } = req.body;
+
+    const user = await User.findById(userId);
+
+    if (!user) {
+      return res.status(404).json({ error: "User not found" });
+    }
+
+    const prompt = `
+You are a clinical nutrition assistant for a mobile health application.
+
+Evaluate whether the detected food fits the person's health goals and medical conditions.
+
+USER PROFILE
+Goal: ${user.goal}
+Diet preference: ${user.dietaryPreference}
+Health conditions: ${user.conditions.join(", ") || "None"}
+Allergies: ${user.allergies.join(", ") || "None"}
+
+FOOD
+Name: ${food.name}
+
+NUTRITION DATA
+Calories: ${food.calories}
+Protein: ${food.protein}
+Carbohydrates: ${food.carbs}
+Fat: ${food.fat}
+Sugar: ${food.sugar}
+Fiber: ${food.fiber}
+Sodium: ${food.sodium}
+Potassium: ${food.potassium}
+
+CLINICAL EVALUATION GUIDELINES
+
+Weight Loss
+Prefer low calorie foods with fiber and moderate protein.
+Avoid foods very high in calories, sugar, or deep fried fats.
+
+Muscle Gain
+Prefer foods rich in protein and balanced carbohydrates for recovery.
+
+Diabetes
+Avoid foods high in sugar or refined carbohydrates.
+Fiber helps slow glucose absorption.
+
+Hypertension
+Avoid foods very high in sodium or heavily processed foods.
+
+Pancreatitis / Gallbladder Issues
+Avoid foods high in fat, oily foods, and deep fried foods.
+
+General Nutrition Rule
+Whole foods like fruits, vegetables, whole grains, and lean proteins are usually beneficial unless another condition makes them unsuitable.
+
+IMPORTANT WRITING RULES
+- Do NOT use phrases like "the user" or "user's goal".
+- Speak naturally and directly.
+- The explanation MUST mention BOTH the health condition and the goal when relevant.
+- Clearly explain WHY the nutrients make the food suitable or unsuitable.
+- Maximum 30 words.
+- Minimum 18 words.
+- Keep the explanation informative but concise.
+- Use simple language suitable for a mobile health app.
+- Never give medical treatment advice.
+
+ALTERNATIVE FOOD RULES
+If the food is not ideal:
+
+1. Prefer healthier versions of the same food category when possible.
+   Example:
+   cake → sugar-free cake, low-carb cake
+   fries → baked potato wedges
+   burger → grilled chicken sandwich
+
+2. If a similar alternative is not possible, suggest healthy foods aligned with the goal.
+
+3. Avoid foods that conflict with dietary preference or allergies.
+
+4. Provide exactly 4 alternatives.
+
+TASK
+Determine whether this food is ideal.
+
+Return ONLY JSON in this format:
+
+{
+ "ideal": true or false,
+ "reason": "clear explanation mentioning nutrition, health condition, and goal (18–30 words)",
+ "alternatives": ["food1","food2","food3","food4"]
+}
+`;
+
+    const aiRes = await axios.post(
+      "https://api.groq.com/openai/v1/chat/completions",
+      {
+        model: "llama-3.3-70b-versatile",
+        messages: [{ role: "system", content: prompt }],
+        response_format: { type: "json_object" }
+      },
+      {
+        headers: { Authorization: `Bearer ${process.env.GROQ_API_KEY}` }
+      }
+    );
+
+    const result = JSON.parse(aiRes.data.choices[0].message.content);
+
+    res.json(result);
+
+  } catch (err) {
+    console.error("Recommendation error:", err);
+    res.status(500).json({ error: "Recommendation failed" });
+  }
 });
 
 /* -------------------- START SERVER -------------------- */

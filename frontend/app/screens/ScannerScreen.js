@@ -30,6 +30,9 @@ export default function ScannerScreen({ navigation, userId }) {
 
   // 🟢 COMPARISON STATE
   const [comparisonItem, setComparisonItem] = useState(null); 
+  // 🟢 RECOMMENDATION STATE
+const [recommendation, setRecommendation] = useState(null);
+const [loadingRecommendation, setLoadingRecommendation] = useState(false);
 
   const isProcessing = useRef(false);
   const isFocused = useIsFocused();
@@ -97,15 +100,42 @@ export default function ScannerScreen({ navigation, userId }) {
       } 
     } catch (err) { Alert.alert('Error', 'Could not add to diary.'); }
   };
+// 🟢 FETCH RECOMMENDATION
+const fetchRecommendation = async (foodData) => {
+  try {
+    setLoadingRecommendation(true);
 
+    const res = await apiClient('recommend-food', 'POST', {
+      userId,
+      food: {
+        name: foodData.name,
+        calories: foodData.calories,
+        protein: foodData.protein,
+        carbs: foodData.carbs,
+        fat: foodData.fat,
+        sugar: foodData.sugar,
+        sodium: foodData.sodium_mg,
+        potassium: foodData.potassium_mg
+      }
+    });
+
+    setRecommendation(res);
+
+  } catch (err) {
+    console.log("Recommendation error:", err);
+  }
+
+  setLoadingRecommendation(false);
+};
   const resetScannerStateForNext = () => {
-    isProcessing.current = false; 
-    setScanned(false);
-    setProductData(null);
-    setBarcode('');
-    setDetectedAllergens([]);
-    setTranslatedText(null);
-  };
+  isProcessing.current = false; 
+  setScanned(false);
+  setProductData(null);
+  setBarcode('');
+  setDetectedAllergens([]);
+  setTranslatedText(null);
+  setRecommendation(null); // 
+};
 
   const resetScanner = () => {
     resetScannerStateForNext();
@@ -123,9 +153,12 @@ export default function ScannerScreen({ navigation, userId }) {
     try {
       const response = await apiClient('scan/analyze', 'POST', { barcode: data, allergies: userAllergies });
       if (response) {
-        setProductData(response);
-        setDetectedAllergens(response.detectedAllergens || []);
-      }
+  setProductData(response);
+  setDetectedAllergens(response.detectedAllergens || []);
+
+  // 🟢 FETCH RECOMMENDATION
+  fetchRecommendation(response);
+}
     } catch (error) {
       setScanned(false);
       isProcessing.current = false;
@@ -267,10 +300,48 @@ export default function ScannerScreen({ navigation, userId }) {
             {/* 5. NUTRITION SUMMARY */}
             <Text style={styles.nutritionTitle}>Nutrition per serving:</Text>
             <View style={styles.nutritionBox}>
-                <Text style={styles.nutriLine}>Calories: {productData?.calories ?? "0"} kcal</Text>
+              <Text style={styles.nutriLine}>Calories: {productData?.calories ?? "0"} kcal</Text>
                 <Text style={styles.nutriLine}>Protein: {productData?.protein ?? "0"}g | Fat: {productData?.fat ?? "0"}g</Text>
                 <Text style={styles.nutriLine}>Sugar: {productData?.sugar ?? "0"}g | Potassium: {productData?.potassium_mg ?? "0"}mg</Text>
             </View>
+              {/* 🟢 AI RECOMMENDATION */}
+{loadingRecommendation && (
+  <ActivityIndicator size="small" color="#2E7D32" />
+)}
+
+{!loadingRecommendation && recommendation && (
+  <View style={{
+    backgroundColor: "#E8F5E9",
+    padding: 15,
+    borderRadius: 15,
+    marginBottom: 20
+  }}>
+    <Text style={{
+      fontWeight: "bold",
+      fontSize: 16,
+      marginBottom: 6,
+      color: "#2E7D32"
+    }}>
+      {recommendation.ideal ? "✅ Good Choice" : "⚠ Not Ideal"}
+    </Text>
+
+    <Text style={{ fontSize: 13, marginBottom: 8 }}>
+      {recommendation.reason}
+    </Text>
+
+    {!recommendation.ideal && (
+      <>
+        <Text style={{ fontWeight: "bold", marginBottom: 4 }}>
+          Better Options
+        </Text>
+
+        {recommendation.alternatives.map((alt, i) => (
+          <Text key={i}>• {alt}</Text>
+        ))}
+      </>
+    )}
+  </View>
+)}
 
             {/* 6. ACTION BUTTONS */}
             <View style={styles.buttonRow}>
