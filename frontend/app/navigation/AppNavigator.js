@@ -13,6 +13,7 @@ import ChatGPT from '../screens/ChatScreen';
 import ScannerScreen from '../screens/ScannerScreen';
 import ProfileNavigator from './ProfileNavigator';
 import CameraScreen from '../screens/CameraScreen';
+import DetectionResultScreen from '../screens/DetectionResultScreen';
 
 const Tab = createBottomTabNavigator();
 const Stack = createNativeStackNavigator();
@@ -92,6 +93,10 @@ const AppNavigator = ({ onLogout, userId }) => (
     </Stack.Screen>
     <Stack.Screen name="Camera" component={CameraScreen} options={{ presentation: 'modal', headerShown: false }} />
     <Stack.Screen name="ManualEntry" component={ManualEntryScreen} options={{ title: 'Add Meal Manually' }} />
+    <Stack.Screen 
+   name="DetectionResult"
+   component={DetectionResultScreen}
+/>
   </Stack.Navigator>
 );
 

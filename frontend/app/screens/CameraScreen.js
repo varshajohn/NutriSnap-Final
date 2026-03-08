@@ -24,14 +24,44 @@ const CameraScreen = ({ navigation }) => {
     );
   }
 
-  const takePicture = async () => {
-    if (cameraRef.current) {
-      const photo = await cameraRef.current.takePictureAsync();
-      console.log('Photo taken:', photo.uri);
-      navigation.goBack();
-      alert("Photo taken! URI: " + photo.uri);
-    }
-  };
+ const takePicture = async () => {
+  if (!cameraRef.current) return;
+
+  try {
+    const photo = await cameraRef.current.takePictureAsync();
+
+    const formData = new FormData();
+    formData.append("image", {
+      uri: photo.uri,
+      name: "photo.jpg",
+      type: "image/jpeg",
+    });
+
+    const response = await fetch(
+      "https://unsubscribed-brittney-superably.ngrok-free.dev/api/detect-food",
+      {
+        method: "POST",
+        body: formData,
+        headers: {
+          "Content-Type": "multipart/form-data",
+          "ngrok-skip-browser-warning": "true",
+        },
+      }
+    );
+
+    const data = await response.json();
+
+    console.log("Detection result:", data);
+
+    navigation.navigate("DetectionResult", {
+      detections: data.detections,
+    });
+
+  } catch (error) {
+    console.error("Detection error:", error);
+    alert("Detection failed");
+  }
+};
 
   return (
     <View style={styles.container}>

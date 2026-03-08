@@ -77,7 +77,9 @@ const ProfileScreen = ({ onLogout, userId }) => {
         <View style={styles.profileHeader}>
           <Image
             source={{
-              uri: user.avatar || `https://ui-avatars.com/api/?name=${encodeURIComponent(user.name)}`,
+              uri:
+                user.avatar ||
+                `https://ui-avatars.com/api/?name=${encodeURIComponent(user.name)}`,
             }}
             style={styles.avatar}
           />
@@ -90,10 +92,32 @@ const ProfileScreen = ({ onLogout, userId }) => {
 
         <View style={styles.detailsContainer}>
           <Text style={styles.sectionTitle}>Personal Information</Text>
-          <InfoRow icon="cake-variant-outline" label="Age" value={user.age ? `${user.age} years` : 'Not set'} />
-          <InfoRow icon="human-male-height" label="Height" value={user.height ? `${user.height} cm` : 'Not set'} />
-          <InfoRow icon="weight-kilogram" label="Weight" value={user.weight ? `${user.weight} kg` : 'Not set'} />
-          <InfoRow icon="flag-checkered" label="Primary Goal" value={goalMap[user.goal] || 'Not set'} />
+          <InfoRow
+            icon="cake-variant-outline"
+            label="Age"
+            value={user.age ? `${user.age} years` : 'Not set'}
+          />
+          <InfoRow
+            icon="human-male-height"
+            label="Height"
+            value={user.height ? `${user.height} cm` : 'Not set'}
+          />
+          <InfoRow
+            icon="weight-kilogram"
+            label="Weight"
+            value={user.weight ? `${user.weight} kg` : 'Not set'}
+          />
+
+          {/* ✅ FIXED GOAL LINE */}
+          <InfoRow
+            icon="flag-checkered"
+            label="Primary Goal"
+            value={
+              goalMap[user.goal] ||   // if stored as code
+              user.goal ||            // if stored as readable text
+              'Not set'
+            }
+          />
         </View>
 
         <View style={styles.healthContainer}>
@@ -114,18 +138,69 @@ const ProfileScreen = ({ onLogout, userId }) => {
 
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: '#f5f5f5' },
-  profileHeader: { alignItems: 'center', paddingVertical: 30, backgroundColor: 'white', borderBottomWidth: 1, borderBottomColor: '#eee' },
-  avatar: { width: 120, height: 120, borderRadius: 60, borderWidth: 3, borderColor: '#4CAF50' },
+  profileHeader: {
+    alignItems: 'center',
+    paddingVertical: 30,
+    backgroundColor: 'white',
+    borderBottomWidth: 1,
+    borderBottomColor: '#eee',
+  },
+  avatar: {
+    width: 120,
+    height: 120,
+    borderRadius: 60,
+    borderWidth: 3,
+    borderColor: '#4CAF50',
+  },
   name: { fontSize: 24, fontWeight: 'bold', marginTop: 15, color: '#333' },
   email: { fontSize: 16, color: 'gray', marginTop: 5 },
-  editButton: { marginTop: 20, backgroundColor: '#4CAF50', paddingVertical: 10, paddingHorizontal: 25, borderRadius: 20 },
+  editButton: {
+    marginTop: 20,
+    backgroundColor: '#4CAF50',
+    paddingVertical: 10,
+    paddingHorizontal: 25,
+    borderRadius: 20,
+  },
   editButtonText: { color: 'white', fontWeight: 'bold', fontSize: 14 },
-  detailsContainer: { backgroundColor: 'white', marginTop: 10, paddingHorizontal: 20 },
-  healthContainer: { backgroundColor: 'white', marginTop: 10, paddingHorizontal: 20, paddingBottom: 20 },
-  sectionTitle: { fontSize: 18, fontWeight: 'bold', color: '#333', paddingTop: 20, paddingBottom: 5 },
-  logoutContainer: { paddingHorizontal: 20, marginTop: 30, marginBottom: 50 },
-  logoutButton: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', backgroundColor: '#ffebee', paddingVertical: 15, borderRadius: 10, borderWidth: 1, borderColor: '#ffcdd2' },
-  logoutButtonText: { color: '#d32f2f', fontSize: 16, fontWeight: 'bold', marginLeft: 10 },
+  detailsContainer: {
+    backgroundColor: 'white',
+    marginTop: 10,
+    paddingHorizontal: 20,
+  },
+  healthContainer: {
+    backgroundColor: 'white',
+    marginTop: 10,
+    paddingHorizontal: 20,
+    paddingBottom: 20,
+  },
+  sectionTitle: {
+    fontSize: 18,
+    fontWeight: 'bold',
+    color: '#333',
+    paddingTop: 20,
+    paddingBottom: 5,
+  },
+  logoutContainer: {
+    paddingHorizontal: 20,
+    marginTop: 30,
+    marginBottom: 50,
+  },
+  logoutButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: '#ffebee',
+    paddingVertical: 15,
+    borderRadius: 10,
+    borderWidth: 1,
+    borderColor: '#ffcdd2',
+  },
+  logoutButtonText: {
+    color: '#d32f2f',
+    fontSize: 16,
+    fontWeight: 'bold',
+    marginLeft: 10,
+  },
 });
 
 export default ProfileScreen;

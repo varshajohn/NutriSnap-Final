@@ -8,10 +8,26 @@ const User = require('./models/User');
 const DiaryEntry = require('./models/DiaryEntry');
 
 const app = express();
+const { execFile } = require("child_process");
+const multer = require("multer");
+const path = require("path");
+const nutritionData = require("./data/nutrition.json");
 
 /* -------------------- MIDDLEWARE -------------------- */
 app.use(cors());
 app.use(express.json({ limit: '10mb' }));
+
+/* -------------------- 📦 MULTER CONFIG -------------------- */
+const storage = multer.diskStorage({
+  destination: (req, file, cb) => {
+    cb(null, "uploads/");
+  },
+  filename: (req, file, cb) => {
+    cb(null, Date.now() + "-" + file.originalname);
+  }
+});
+
+const upload = multer({ storage });
 
 /* -------------------- DB -------------------- */
 mongoose.connect(process.env.MONGO_URI)
@@ -318,6 +334,43 @@ app.post("/api/chat", async (req, res) => {
 
         res.json({ reply: response.data.choices[0].message.content });
     } catch (error) { res.status(500).json({ error: "Chat Error" }); }
+});
+
+/* -------------------- 🧠 YOLO FOOD DETECTION -------------------- */
+app.post("/api/detect-food", upload.single("image"), (req, res) => {
+  const imagePath = req.file.path;
+
+  const pythonCmd = "py";
+  const inferPath = path.join(__dirname, "..", "..", "ai-module", "infer.py");
+
+  const args = [
+    "-3.10",
+    inferPath,
+    imagePath
+  ];
+
+  execFile(pythonCmd, args, (error, stdout, stderr) => {
+    if (error) {
+      console.error("Python error:", stderr);
+      return res.status(500).json({ error: "Detection failed" });
+    }
+
+    try {
+      const detections = JSON.parse(stdout);
+
+      const enrichedDetections = detections.map(d => ({
+        label: d.label,
+        confidence: d.confidence,
+        nutrition: nutritionData[d.label] || null
+      }));
+
+      res.json({ detections: enrichedDetections });
+
+    } catch (e) {
+      console.error("Invalid Python output:", stdout);
+      res.status(500).json({ error: "Invalid model output" });
+    }
+  });
 });
 
 /* -------------------- START SERVER -------------------- */

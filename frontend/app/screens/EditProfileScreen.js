@@ -8,7 +8,6 @@ import {
   Alert,
   Image,
   TouchableOpacity,
-  Platform,
 } from 'react-native';
 import { Formik } from 'formik';
 import * as Yup from 'yup';
@@ -28,13 +27,22 @@ const COMMON_ALLERGENS = [
   "Milk", "Eggs", "Peanuts", "Tree Nuts", "Soy", "Wheat", "Fish", "Shellfish", "Gluten"
 ];
 
+const dietaryOptions = [
+  "Vegetarian",
+  "Non-Vegetarian",
+  "Vegan",
+  "Keto",
+  "Low-Carb"
+];
+
 const EditProfileScreen = ({ navigation, route }) => {
   const { user } = route.params;
 
-  // Initial state for image. If no avatar, use a high-quality placeholder.
   const defaultPlaceholder = "https://www.pngmart.com/files/23/Profile-PNG-Photo.png";
+
   const [image, setImage] = useState(user.avatar || defaultPlaceholder);
   const [selectedAllergies, setSelectedAllergies] = useState(user.allergies || []);
+  const [preference, setPreference] = useState(user.preference || "");
 
   const toggleAllergy = (allergy) => {
     if (selectedAllergies.includes(allergy)) {
@@ -55,8 +63,8 @@ const EditProfileScreen = ({ navigation, route }) => {
       mediaTypes: ImagePicker.MediaTypeOptions.Images,
       allowsEditing: true,
       aspect: [1, 1],
-      quality: 0.2, // 🟢 Keep quality low (0.2) to fit in MongoDB's 16MB limit
-      base64: true, // 🟢 Convert to string for DB storage
+      quality: 0.2,
+      base64: true,
     });
 
     if (!result.canceled) {
@@ -67,11 +75,7 @@ const EditProfileScreen = ({ navigation, route }) => {
   const handleDeletePhoto = () => {
     Alert.alert("Delete Photo", "Reset to default profile picture?", [
       { text: "Cancel", style: "cancel" },
-      { 
-        text: "Delete", 
-        style: 'destructive', 
-        onPress: () => setImage("") // 🟢 Sending empty string tells backend to reset to default
-      }
+      { text: "Delete", style: 'destructive', onPress: () => setImage("") }
     ]);
   };
 
@@ -79,8 +83,9 @@ const EditProfileScreen = ({ navigation, route }) => {
     try {
       const dataToSave = {
         ...values,
-        avatar: image, // Sends Base64 string or empty string
+        avatar: image,
         allergies: selectedAllergies,
+        preference: preference,
         conditions: values.conditions
           ? values.conditions.split(',').map(s => s.trim()).filter(Boolean)
           : [],
@@ -113,18 +118,13 @@ const EditProfileScreen = ({ navigation, route }) => {
           {({ handleChange, handleSubmit, values, errors, touched }) => (
             <View style={styles.formContainer}>
               
-              {/* IMAGE SECTION */}
               <View style={styles.imageContainer}>
-                <Image 
-                  source={{ uri: image || defaultPlaceholder }} 
-                  style={styles.avatar} 
-                />
+                <Image source={{ uri: image || defaultPlaceholder }} style={styles.avatar} />
                 <View style={styles.imageActions}>
                   <TouchableOpacity style={styles.cameraIcon} onPress={pickImage}>
                     <MaterialCommunityIcons name="camera" size={20} color="white" />
                   </TouchableOpacity>
-                  
-                  {/* Delete button only shows if image isn't already empty */}
+
                   {image !== "" && (
                     <TouchableOpacity style={styles.deleteIcon} onPress={handleDeletePhoto}>
                       <MaterialCommunityIcons name="trash-can" size={18} color="white" />
@@ -133,7 +133,6 @@ const EditProfileScreen = ({ navigation, route }) => {
                 </View>
               </View>
 
-              {/* INPUT FIELDS */}
               <Text style={styles.label}>Full Name</Text>
               <AppTextInput onChangeText={handleChange('name')} value={values.name} />
               {touched.name && errors.name && <Text style={styles.error}>{errors.name}</Text>}
@@ -152,7 +151,6 @@ const EditProfileScreen = ({ navigation, route }) => {
               <Text style={styles.label}>Height (cm)</Text>
               <AppTextInput onChangeText={handleChange('height')} value={values.height} keyboardType="numeric" />
 
-              {/* ALLERGIES CHIPS */}
               <Text style={styles.label}>My Allergies</Text>
               <View style={styles.chipContainer}>
                 {COMMON_ALLERGENS.map((allergy) => (
@@ -169,47 +167,42 @@ const EditProfileScreen = ({ navigation, route }) => {
               </View>
 
               <Text style={[styles.label, { marginTop: 20 }]}>Health Goal</Text>
-              <AppTextInput 
-                onChangeText={handleChange('goal')} 
-                value={values.goal} 
-                placeholder="e.g. Weight Loss" 
-              />
+              <AppTextInput onChangeText={handleChange('goal')} value={values.goal} placeholder="e.g. Weight Loss" />
 
               <Text style={[styles.label, { marginTop: 20 }]}>Conditions</Text>
-              <AppTextInput 
-                onChangeText={handleChange('conditions')} 
-                value={values.conditions} 
-                placeholder="e.g. Diabetes (comma separated)" 
-              />
+              <AppTextInput onChangeText={handleChange('conditions')} value={values.conditions} placeholder="e.g. Diabetes (comma separated)" />
+
+              <Text style={[styles.label, { marginTop: 20 }]}>Dietary Preference</Text>
+              <View style={styles.pickerContainer}>
+                {dietaryOptions.map(opt => (
+                  <TouchableOpacity
+                    key={opt}
+                    style={[styles.chip, preference === opt && styles.activeChip]}
+                    onPress={() => setPreference(opt)}
+                  >
+                    <Text style={preference === opt ? styles.whiteText : styles.greenText}>
+                      {opt}
+                    </Text>
+                  </TouchableOpacity>
+                ))}
+              </View>
 
               <TouchableOpacity style={styles.saveBtn} onPress={handleSubmit}>
                 <Text style={styles.saveBtnText}>SAVE CHANGES</Text>
               </TouchableOpacity>
             </View>
           )}
-
-          <Text style={styles.label}>Dietary Preference</Text>
-<View style={styles.pickerContainer}>
-  {dietaryOptions.map(opt => (
-    <TouchableOpacity 
-      key={opt} 
-      style={[styles.chip, preference === opt && styles.activeChip]}
-      onPress={() => setPreference(opt)}
-    >
-      <Text style={preference === opt ? styles.whiteText : styles.greenText}>{opt}</Text>
-    </TouchableOpacity>
-  ))}
-</View>
-
         </Formik>
       </ScrollView>
     </SafeAreaView>
   );
 };
 
+export default EditProfileScreen;
+
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: '#F1F8E9' },
-  scrollContent: { paddingBottom: 130 }, // 🟢 Added extra padding to clear floating Navbar
+  scrollContent: { paddingBottom: 130 },
   formContainer: { 
     padding: 20, 
     backgroundColor: 'white', 
@@ -220,28 +213,9 @@ const styles = StyleSheet.create({
   },
   imageContainer: { alignItems: 'center', marginBottom: 25 },
   avatar: { width: 120, height: 120, borderRadius: 60, borderWidth: 4, borderColor: '#2E7D32', backgroundColor: '#eee' },
-  imageActions: {
-    flexDirection: 'row',
-    position: 'absolute',
-    bottom: -10,
-    gap: 10,
-  },
-  cameraIcon: {
-    backgroundColor: '#2E7D32',
-    padding: 10,
-    borderRadius: 25,
-    borderWidth: 3,
-    borderColor: 'white',
-    elevation: 5,
-  },
-  deleteIcon: {
-    backgroundColor: '#D32F2F',
-    padding: 10,
-    borderRadius: 25,
-    borderWidth: 3,
-    borderColor: 'white',
-    elevation: 5,
-  },
+  imageActions: { flexDirection: 'row', position: 'absolute', bottom: -10, gap: 10 },
+  cameraIcon: { backgroundColor: '#2E7D32', padding: 10, borderRadius: 25, borderWidth: 3, borderColor: 'white', elevation: 5 },
+  deleteIcon: { backgroundColor: '#D32F2F', padding: 10, borderRadius: 25, borderWidth: 3, borderColor: 'white', elevation: 5 },
   label: { fontSize: 14, fontWeight: '700', color: '#1B5E20', marginTop: 15, marginBottom: 5 },
   row: { flexDirection: 'row' },
   error: { color: 'red', fontSize: 12, marginLeft: 5 },
@@ -250,19 +224,10 @@ const styles = StyleSheet.create({
   chipSelected: { backgroundColor: '#2E7D32', borderColor: '#2E7D32' },
   chipText: { color: '#4CAF50', fontSize: 13, fontWeight: '600' },
   chipTextSelected: { color: 'white' },
-  saveBtn: { 
-    backgroundColor: '#2E7D32', 
-    padding: 18, 
-    borderRadius: 15, 
-    marginTop: 40, 
-    alignItems: 'center', 
-    elevation: 4,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.2,
-    shadowRadius: 5,
-  },
+  pickerContainer: { flexDirection: 'row', flexWrap: 'wrap', marginTop: 10 },
+  activeChip: { backgroundColor: '#2E7D32', borderColor: '#2E7D32' },
+  whiteText: { color: 'white', fontWeight: '600' },
+  greenText: { color: '#2E7D32', fontWeight: '600' },
+  saveBtn: { backgroundColor: '#2E7D32', padding: 18, borderRadius: 15, marginTop: 40, alignItems: 'center', elevation: 4 },
   saveBtnText: { color: 'white', fontWeight: '800', fontSize: 16, letterSpacing: 1 },
 });
-
-export default EditProfileScreen;
