@@ -1,0 +1,16 @@
+{
+  "orange": [],
+  "tomato": [],
+  "milk": ["milk", "dairy", "lactose"],
+  "biryani": ["gluten"],
+  "chocolatecake": ["milk", "egg", "gluten"],
+  "fries": [],
+  "pasta": ["gluten"],
+  "chapathi": ["gluten"],
+  "omelette": ["egg"],
+  "onion": [],
+  "burger": ["gluten", "milk", "egg"],
+  "rice": ["gluten"],
+  "cheesecake": ["milk", "egg", "gluten"]
+
+}

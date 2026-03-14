@@ -12,6 +12,7 @@ const { execFile } = require("child_process");
 const multer = require("multer");
 const path = require("path");
 const nutritionData = require("./data/nutrition.json");
+const allergenData = require("./data/allergens.json");
 
 /* -------------------- MIDDLEWARE -------------------- */
 app.use(cors());
@@ -337,19 +338,18 @@ app.post("/api/chat", async (req, res) => {
 });
 
 /* -------------------- 🧠 YOLO FOOD DETECTION -------------------- */
-app.post("/api/detect-food", upload.single("image"), (req, res) => {
+app.post("/api/detect-food", upload.single("image"), async (req, res) => {
   const imagePath = req.file.path;
 
-  const pythonCmd = "py";
+  const pythonCmd = "python";
   const inferPath = path.join(__dirname, "..", "..", "ai-module", "infer.py");
 
   const args = [
-    "-3.10",
     inferPath,
     imagePath
   ];
 
-  execFile(pythonCmd, args, (error, stdout, stderr) => {
+  execFile(pythonCmd, args, async (error, stdout, stderr) => {
     if (error) {
       console.error("Python error:", stderr);
       return res.status(500).json({ error: "Detection failed" });
@@ -358,13 +358,35 @@ app.post("/api/detect-food", upload.single("image"), (req, res) => {
     try {
       const detections = JSON.parse(stdout);
 
+const userId = req.body.userId;
+
+let userAllergies = [];
+
+if (userId) {
+  const user = await User.findById(userId);
+
+  userAllergies = (user?.allergies || []).map(a =>
+    a.toLowerCase().replace(/s$/, "")
+  );
+}
+
 const enrichedDetections = detections.map(d => {
+
   const key = d.label.toLowerCase().trim();
+
+  const foodAllergens = allergenData[key] || [];
+
+ const detectedAllergens = foodAllergens.filter(a =>
+  userAllergies.includes(a.toLowerCase())
+);
 
   return {
     label: d.label,
     confidence: d.confidence,
-    nutrition: nutritionData[key] || null
+    nutrition: nutritionData[key] || null,
+    allergens: foodAllergens,
+    allergenWarning: detectedAllergens.length > 0,
+    detectedAllergens
   };
 });
 

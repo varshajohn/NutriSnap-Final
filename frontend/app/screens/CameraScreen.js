@@ -39,9 +39,9 @@ const CameraScreen = ({ navigation, route }) => {
       name: "photo.jpg",
       type: "image/jpeg",
     });
-
+    formData.append("userId", userId);
     const response = await fetch(
-      "https://unsubscribed-brittney-superably.ngrok-free.dev/api/detect-food",
+      "https://nonobjectivistic-deacon-unshifting.ngrok-free.dev/api/detect-food",
       {
         method: "POST",
         body: formData,
