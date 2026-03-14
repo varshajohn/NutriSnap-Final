@@ -2,7 +2,7 @@
 
 // ⚠️ CHANGE 1: Use your NGROK URL (matches your Chatbot and Scanner)
 // ⚠️ CHANGE 2: Ensure it ends with /api
-const API_BASE_URL = 'https://nonobjectivistic-deacon-unshifting.ngrok-free.dev/api';
+const API_BASE_URL = "https://unsubscribed-brittney-superably.ngrok-free.dev/api";
 
 const apiClient = async (endpoint, method = 'GET', body = null) => {
   try {

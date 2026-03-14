@@ -41,7 +41,7 @@ const DetectionResultScreen = ({ route, navigation }) => {
       try {
 
         const res = await fetch(
-          "https://nonobjectivistic-deacon-unshifting.ngrok-free.dev/api/detect-food",
+          "https://unsubscribed-brittney-superably.ngrok-free.dev/api/recommend-food",
           {
             method: "POST",
             headers: {
@@ -224,18 +224,17 @@ const DetectionResultScreen = ({ route, navigation }) => {
 
             {!recommendation.ideal && (
 
-              <>
-                <Text style={styles.altTitle}>Better Options</Text>
+  <>
+    <Text style={styles.altTitle}>Better Options</Text>
 
-                {recommendation.alternatives.map((alt, index) => (
-                  <Text key={index} style={styles.altItem}>
-                    • {alt}
-                  </Text>
-                ))}
+    {recommendation?.alternatives?.map((alt, index) => (
+      <Text key={index} style={styles.altItem}>
+        • {alt}
+      </Text>
+    ))}
 
-              </>
-
-            )}
+  </>
+)}
 
           </View>
 

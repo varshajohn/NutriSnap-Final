@@ -339,6 +339,11 @@ app.post("/api/chat", async (req, res) => {
 
 /* -------------------- 🧠 YOLO FOOD DETECTION -------------------- */
 app.post("/api/detect-food", upload.single("image"), async (req, res) => {
+
+  if (!req.file) {
+    return res.status(400).json({ error: "No image uploaded" });
+  }
+
   const imagePath = req.file.path;
 
   const pythonCmd = "python";
@@ -418,8 +423,8 @@ Evaluate whether the detected food fits the person's health goals and medical co
 USER PROFILE
 Goal: ${user.goal}
 Diet preference: ${user.dietaryPreference}
-Health conditions: ${user.conditions.join(", ") || "None"}
-Allergies: ${user.allergies.join(", ") || "None"}
+Health conditions: ${(user.conditions || []).join(", ") || "None"}
+Allergies: ${(user.allergies || []).join(", ") || "None"}
 
 FOOD
 Name: ${food.name}

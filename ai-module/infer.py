@@ -5,14 +5,7 @@ import json
 
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 
-MODEL_PATH = os.path.join(
-    BASE_DIR,
-    "runs",
-    "food_detection",
-    "v5_9class",
-    "weights",
-    "best.pt"
-)
+MODEL_PATH = os.path.join(BASE_DIR, "best.pt")
 
 model = YOLO(MODEL_PATH)
 
