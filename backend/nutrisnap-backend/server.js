@@ -63,9 +63,9 @@ app.get('/api/health/risk-assessment', async (req, res) => {
   try {
     const { userId } = req.query;
     const user = await User.findById(userId);
-    const thirtyDaysAgo = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000);
-
-    const logs = await DiaryEntry.find({ userId, date: { $gte: thirtyDaysAgo } });
+   const period = req.query.period === "weekly" ? 7 : 30;
+const startDate = new Date(Date.now() - period * 24 * 60 * 60 * 1000);
+    const logs = await DiaryEntry.find({ userId, date: { $gte: startDate } });
 
     if (logs.length < 5) {
       return res.json({ status: "Gathering Data", message: "Log 5+ meals to unlock clinical report." });
@@ -74,14 +74,15 @@ app.get('/api/health/risk-assessment', async (req, res) => {
     const uniqueDays = [...new Set(logs.map(l => new Date(l.date).toDateString()))].length;
     const daysFactor = uniqueDays || 1;
 
-    let totals = { sodium: 0, potassium: 0, gl: 0, cals: 0, iron: 0 };
+    let totals = { sodium: 0, potassium: 0, gl: 0, cals: 0, iron: 0, carbs: 0 };
     logs.forEach(log => {
-      totals.sodium += log.sodium_mg || 0;
-      totals.potassium += log.potassium_mg || 0;
-      totals.cals += log.calories || 0;
-      totals.iron += log.iron_mg || 0;
-      totals.gl += ((log.glycemic_index || 55) * (log.carbs || 0)) / 100;
-    });
+  totals.sodium += log.sodium_mg || 0;
+  totals.potassium += log.potassium_mg || 0;
+  totals.cals += log.calories || 0;
+  totals.iron += log.iron_mg || 0;
+  totals.carbs += log.carbs || 0;   // ADD THIS LINE
+  totals.gl += ((log.glycemic_index || 55) * (log.carbs || 0)) / 100;
+});
 
     // 1. REFINED HYPERTENSION (Na:K Ratio with Safety Baseline)
     const naKRatio = totals.sodium / Math.max(totals.potassium, (daysFactor * 500)); 
@@ -96,7 +97,42 @@ app.get('/api/health/risk-assessment', async (req, res) => {
     const oRisk = Math.min((Math.max(0, (totals.cals / daysFactor) - tdee) / 500) * 100, 100);
 
     // 4. ANEMIA
-    const aRisk = (totals.iron / daysFactor) < (user.gender === 'female' ? 18 : 8) ? 65 : 15;
+   const aRisk = (totals.iron / daysFactor) < (user.gender === 'female' ? 18 : 8) ? 65 : 15;
+
+// ⭐ Balanced Day Badge Logic
+
+if (!user.dailyBadges) user.dailyBadges = [];
+
+const today = new Date();
+today.setHours(0,0,0,0);
+
+const todayLogs = logs.filter(l => {
+  const d = new Date(l.date);
+  d.setHours(0,0,0,0);
+  return d.getTime() === today.getTime();
+});
+
+if (todayLogs.length > 0) {
+
+  const alreadyExists = user.dailyBadges.find(b =>
+    new Date(b.date).toDateString() === today.toDateString()
+  );
+
+  const isBalancedDay =
+    hRisk < 40 &&
+    dRisk < 40 &&
+    oRisk < 40;
+
+  if (isBalancedDay && !alreadyExists) {
+
+    user.dailyBadges.push({
+      date: today,
+      badge: "Balanced Day"
+    });
+
+    await user.save();
+  }
+}
 
     // 5. DYNAMIC AI INSIGHT (Groq Powered)
     let dynamicInsight = "";
@@ -110,19 +146,32 @@ app.get('/api/health/risk-assessment', async (req, res) => {
     } catch (e) { dynamicInsight = "Keep balancing your greens and proteins for optimal stability."; }
 
     res.json({
-      status: "Success",
-      indices: { hypertension: Math.round(hRisk), diabetes: Math.round(dRisk), obesity: Math.round(oRisk), anemia: Math.round(aRisk) },
-      rawTotals: {
+  status: "Success",
+
+  indices: {
+    hypertension: Math.round(hRisk),
+    diabetes: Math.round(dRisk),
+    obesity: Math.round(oRisk),
+    anemia: Math.round(aRisk)
+  },
+
+  rawTotals:{
     sodium: totals.sodium,
     potassium: totals.potassium,
     carbs: totals.carbs,
     avgGI: Math.round(totals.gl / (totals.carbs / 100 || 1))
   },
-      insights: [dynamicInsight],
-      healthStability: 100 - Math.round((hRisk + dRisk + oRisk) / 3),
-      isBiometricsComplete: !!(user.weight && user.height && user.age),
-      stabilityStreak: 3 // Hardcoded simulation
-    });
+
+  insights:[dynamicInsight],
+
+  healthStability: 100 - Math.round((hRisk + dRisk + oRisk) / 3),
+
+  badgesCalendar: user.dailyBadges || [],
+
+  streak: user.streak || 0,
+
+  isBiometricsComplete: !!(user.weight && user.height && user.age)
+});
   } catch (err) { res.status(500).json({ error: "Risk Engine Error" }); }
 });
 

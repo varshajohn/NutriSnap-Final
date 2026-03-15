@@ -20,6 +20,8 @@ const HomeScreen = ({ userId }) => {
   const [riskData, setRiskData] = useState(null);
   const [loading, setLoading] = useState(true);
   const [infoModalVisible, setInfoModalVisible] = useState(false);
+  const [period, setPeriod] = useState("monthly");
+  const [calendarVisible, setCalendarVisible] = useState(false);
 
   const shimmerValue = useRef(new Animated.Value(0.3)).current;
 
@@ -34,25 +36,38 @@ const HomeScreen = ({ userId }) => {
     }
   }, [loading]);
 
-  const fetchHomeData = useCallback(async () => {
-    if (!userId) return;
-    try {
-      const [u, s, r] = await Promise.all([
-        apiClient(`user/${userId}`),
-        apiClient(`todaySummary?userId=${userId}`),
-        apiClient(`health/risk-assessment?userId=${userId}`)
-      ]);
-      setUser(u);
-      setSummary(s);
-      if (r && r.status === "Success") setRiskData(r);
-    } catch (e) {
-      console.error("Home Fetch Error:", e);
-    } finally {
-      setLoading(false);
+ const fetchHomeData = useCallback(async () => {
+  if (!userId) return;
+
+  console.log("Current Period:", period);
+
+  try {
+    const [u, s, r] = await Promise.all([
+      apiClient(`user/${userId}`),
+      apiClient(`todaySummary?userId=${userId}`),
+      apiClient(`health/risk-assessment?userId=${userId}&period=${period}`)
+    ]);
+
+    setUser(u);
+    setSummary(s);
+
+    if (r && r.status === "Success") {
+      console.log("RISK DATA:", r);
+setRiskData(r);
     }
-  }, [userId]);
+
+  } catch (e) {
+    console.error("Home Fetch Error:", e);
+  } finally {
+    setLoading(false);
+  }
+
+}, [userId, period]);
 
   useFocusEffect(useCallback(() => { fetchHomeData(); }, [fetchHomeData]));
+  useEffect(() => {
+  fetchHomeData();
+}, [period]);
 
   // 🟢 Logic: User-Friendly Status Labels
   const getStatus = (val) => {
@@ -120,21 +135,79 @@ const HomeScreen = ({ userId }) => {
       </SafeAreaView>
     );
   }
+// ---------------- CALENDAR GENERATION ----------------
 
+const now = new Date();
+const year = now.getFullYear();
+const month = now.getMonth();
+
+const firstDay = new Date(year, month, 1).getDay();
+const daysInMonth = new Date(year, month + 1, 0).getDate();
+
+const days = [];
+
+// convert sunday start → monday start
+const startOffset = firstDay === 0 ? 6 : firstDay - 1;
+
+// empty cells
+for (let i = 0; i < startOffset; i++) {
+  days.push(<View key={"empty" + i} style={styles.dayCell} />);
+}
+
+// actual days
+for (let d = 1; d <= daysInMonth; d++) {
+
+  const badgeDay = riskData?.badgesCalendar?.find(b => {
+    const date = new Date(b.date);
+    return (
+      date.getDate() === d &&
+      date.getMonth() === month &&
+      date.getFullYear() === year
+    );
+  });
+
+  days.push(
+    <View key={d} style={styles.dayCell}>
+      <Text style={styles.dayText}>{d}</Text>
+      {badgeDay && <View style={styles.badgeDot}/>}
+    </View>
+  );
+}
   return (
     <SafeAreaView style={styles.container}>
       <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.scrollContent}>
         
         {/* HEADER */}
         <View style={styles.header}>
-          <View>
-            <Text style={styles.dateText}>{new Date().toLocaleDateString('en-US', { month: 'short', day: 'numeric', weekday: 'short' })}</Text>
-            <Text style={styles.welcomeText}>Hey, {user?.name?.split(' ')[0]}! ✨</Text>
-          </View>
-          <TouchableOpacity onPress={() => navigation.navigate('Profile')}>
-            <Image source={{ uri: user?.avatar || 'https://www.pngmart.com/files/23/Profile-PNG-Photo.png' }} style={styles.avatar} />
-          </TouchableOpacity>
-        </View>
+  <View>
+    <Text style={styles.dateText}>
+      {new Date().toLocaleDateString('en-US', { month: 'short', day: 'numeric', weekday: 'short' })}
+    </Text>
+    <Text style={styles.welcomeText}>Hey, {user?.name?.split(' ')[0]}! ✨</Text>
+  </View>
+
+  <View style={{flexDirection:"row", alignItems:"center"}}>
+
+    <TouchableOpacity
+      style={{marginRight:12}}
+      onPress={() => setCalendarVisible(true)}
+    >
+      <MaterialCommunityIcons 
+        name="trophy-outline" 
+        size={26} 
+        color="#2E7D32"
+      />
+    </TouchableOpacity>
+
+    <TouchableOpacity onPress={() => navigation.navigate('Profile')}>
+      <Image
+        source={{ uri: user?.avatar || 'https://www.pngmart.com/files/23/Profile-PNG-Photo.png' }}
+        style={styles.avatar}
+      />
+    </TouchableOpacity>
+
+  </View>
+</View>
 
         {/* 1. HERO: PROGRESSIVE ONBOARDING */}
         {!riskData?.isBiometricsComplete ? (
@@ -156,15 +229,43 @@ const HomeScreen = ({ userId }) => {
               <MaterialCommunityIcons name="shield-check" size={70} color="rgba(255,255,255,0.2)" />
             </View>
         )}
-
+        {/* 🔥 DAILY STREAK */}
+{riskData?.streak > 0 && (
+<View style={styles.streakCard}>
+  <Text style={styles.streakTitle}>🔥 {riskData.streak} Day Nutrition Streak</Text>
+  <Text style={styles.streakSub}>Keep logging meals to maintain your streak!</Text>
+</View>
+)}
         {/* 2. RISK ANALYSIS GRID */}
+        <View style={styles.riskDashboard}>
         <View style={styles.sectionHeaderRow}>
-            <Text style={styles.sectionTitle}>Smart Risk Analysis</Text>
-            <TouchableOpacity onPress={() => setInfoModalVisible(true)}>
-                <MaterialCommunityIcons name="information-outline" size={20} color="#2E7D32" />
-            </TouchableOpacity>
-        </View>
+    <Text style={styles.sectionTitle}>Smart Risk Analysis</Text>
+    <TouchableOpacity onPress={() => setInfoModalVisible(true)}>
+        <MaterialCommunityIcons name="information-outline" size={20} color="#2E7D32" />
+    </TouchableOpacity>
+</View>
+        <View style={styles.toggleContainer}>
+  <TouchableOpacity
+    style={[styles.toggleBtn, period === "weekly" && styles.activeToggle]}
+    onPress={() => setPeriod("weekly")}
+  >
+    <Text style={[styles.toggleText, period === "weekly" && styles.activeToggleText]}>
+      Weekly
+    </Text>
+  </TouchableOpacity>
 
+  <TouchableOpacity
+    style={[styles.toggleBtn, period === "monthly" && styles.activeToggle]}
+    onPress={() => setPeriod("monthly")}
+  >
+    <Text style={[styles.toggleText, period === "monthly" && styles.activeToggleText]}>
+      Monthly
+    </Text>
+  </TouchableOpacity>
+</View>
+<Text style={{fontSize:12, color:'#666', marginBottom:5}}>
+  Showing {period === "weekly" ? "Last 7 Days" : "Last 30 Days"} Analysis
+</Text>
         <View style={styles.bentoGrid}>
           <RiskTile 
             title="Salt Balance" 
@@ -193,6 +294,8 @@ const HomeScreen = ({ userId }) => {
             onAction={() => handleImprove('Obesity', riskData?.indices.obesity)}
             onPress={() => showRawStats('Lifestyle & Obesity Trend')}
         />
+
+        </View>
 
         {/* 3. DYNAMIC AI INSIGHT */}
         <TouchableOpacity style={styles.insightBox} onPress={() => navigation.navigate('Chat')}>
@@ -241,6 +344,38 @@ const HomeScreen = ({ userId }) => {
             </View>
         </View>
       </Modal>
+      <Modal
+visible={calendarVisible}
+transparent
+animationType="fade"
+>
+<View style={styles.modalOverlay}>
+
+<View style={styles.calendarCard}>
+
+<View style={styles.calendarHeader}>
+<Text style={styles.calendarTitle}>March {new Date().getFullYear()}</Text>
+
+<TouchableOpacity onPress={() => setCalendarVisible(false)}>
+<MaterialCommunityIcons name="close" size={24} color="#333"/>
+</TouchableOpacity>
+
+</View>
+
+<View style={styles.weekRow}>
+{["Mon","Tue","Wed","Thu","Fri","Sat","Sun"].map(d => (
+<Text key={d} style={styles.weekDay}>{d}</Text>
+))}
+</View>
+
+<View style={styles.calendarGrid}>
+{days}
+</View>
+
+</View>
+
+</View>
+</Modal>
     </SafeAreaView>
   );
 };
@@ -255,7 +390,18 @@ const RiskTile = ({ title, value, icon, status, onAction, onPress }) => (
       </View>
     </View>
     <Text style={styles.tileTitle}>{title}</Text>
-    <Progress.Bar progress={value / 100} width={width * 0.35} color={status.color} unfilledColor="#F0F0F0" borderWidth={0} height={6} style={{marginTop: 10}} />
+     <Progress.Bar
+  progress={value / 100}
+  width={width * 0.35}
+  color={status.color}
+  unfilledColor="#F0F0F0"
+  borderWidth={0}
+  height={6}
+  animated={true}
+  animationType="spring"
+  animationConfig={{ duration: 600 }}
+  style={{ marginTop: 10 }}
+/>
     <TouchableOpacity style={{marginTop: 10}} onPress={onAction}>
         <Text style={[styles.improveLink, {color: status.color}]}>Improve →</Text>
     </TouchableOpacity>
@@ -275,13 +421,24 @@ const WideRiskTile = ({ title, value, icon, status, subtext, onAction, onPress }
         </View>
         <Text style={styles.wideSubText}>{subtext}</Text>
         <View style={styles.wideProgressWrapper}>
-            <Progress.Bar progress={value / 100} width={width - 165} color={status.color} unfilledColor="#F0F0F0" borderWidth={0} height={8} />
+            <Progress.Bar
+  progress={value / 100}
+  width={width - 165}
+  color={status.color}
+  unfilledColor="#F0F0F0"
+  borderWidth={0}
+  height={8}
+  animated={true}
+  animationType="spring"
+  animationConfig={{ duration: 600 }}
+/>
             <TouchableOpacity onPress={onAction}>
                 <Text style={[styles.improveLink, {color: status.color, marginTop: 0}]}>Improve →</Text>
             </TouchableOpacity>
         </View>
     </TouchableOpacity>
 );
+
 
 const ToolCard = ({ icon, label, onPress }) => (
     <TouchableOpacity style={styles.toolCard} onPress={onPress}>
@@ -291,6 +448,131 @@ const ToolCard = ({ icon, label, onPress }) => (
 );
 
 const styles = StyleSheet.create({
+  toggleContainer: {
+  flexDirection: 'row',
+  backgroundColor: '#E8F5E9',
+  borderRadius: 20,
+  padding: 4,
+  marginBottom: 10
+},
+
+toggleBtn: {
+  flex: 1,
+  paddingVertical: 6,
+  alignItems: 'center',
+  borderRadius: 15
+},
+
+activeToggle: {
+  backgroundColor: '#2E7D32'
+},
+
+toggleText: {
+  fontSize: 12,
+  fontWeight: 'bold',
+  color: '#1B5E20'
+},
+
+activeToggleText: {
+  color: 'white'
+},
+streakCard:{
+backgroundColor:"#FFF7E6",
+padding:16,
+borderRadius:18,
+marginTop:15,
+borderWidth:1,
+borderColor:"#FFE0B2"
+},
+
+streakTitle:{
+fontSize:16,
+fontWeight:"bold",
+color:"#E65100"
+},
+
+streakSub:{
+fontSize:12,
+marginTop:4,
+color:"#6D4C41"
+},
+
+badgeContainer:{
+flexDirection:"row",
+flexWrap:"wrap",
+marginTop:10,
+gap:8
+},
+
+badge:{
+backgroundColor:"#E8F5E9",
+paddingHorizontal:12,
+paddingVertical:6,
+borderRadius:20,
+borderWidth:1,
+borderColor:"#C8E6C9"
+},
+
+badgeText:{
+fontSize:12,
+fontWeight:"600",
+color:"#2E7D32"
+},
+calendarCard:{
+backgroundColor:"#FFF",
+borderRadius:20,
+padding:20,
+width:"90%"
+},
+
+calendarHeader:{
+flexDirection:"row",
+justifyContent:"space-between",
+alignItems:"center",
+marginBottom:10
+},
+
+calendarTitle:{
+fontSize:18,
+fontWeight:"bold"
+},
+
+weekRow:{
+flexDirection:"row",
+justifyContent:"space-between",
+marginBottom:10
+},
+
+weekDay:{
+width:30,
+textAlign:"center",
+fontSize:12,
+color:"#666"
+},
+
+calendarGrid:{
+flexDirection:"row",
+flexWrap:"wrap"
+},
+
+dayCell:{
+width:"14.2%",
+alignItems:"center",
+marginBottom:12
+},
+
+dayText:{
+fontSize:12
+},
+
+badgeDot:{
+width:8,
+height:8,
+borderRadius:5,
+backgroundColor:"#4CAF50",
+marginTop:4
+},
+
   container: { flex: 1, backgroundColor: '#F9FCF9' },
   scrollContent: { padding: 20, paddingBottom: 130 },
   skeleton: { backgroundColor: '#EBEBEB', borderRadius: 10 },

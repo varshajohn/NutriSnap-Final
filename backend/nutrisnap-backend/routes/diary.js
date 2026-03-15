@@ -1,9 +1,9 @@
 const express = require('express');
 const router = express.Router();
 const DiaryEntry = require('../models/DiaryEntry');
+const User = require('../models/User');
 
 // Add a diary entry
-
 router.post('/add', async (req, res) => {
   const { 
     userId, 
@@ -25,7 +25,7 @@ router.post('/add', async (req, res) => {
   }
 
   try {
-    // We explicitly map the fields to ensure they are saved as Numbers
+
     const entry = new DiaryEntry({
       userId,
       productName,
@@ -34,18 +34,72 @@ router.post('/add', async (req, res) => {
       fat: Number(fat) || 0,
       carbs: Number(carbs) || 0,
       sugar: Number(sugar) || 0,
-      // --- NEW RESEARCH FIELDS ---
+
       sodium_mg: Number(sodium_mg) || 0,
       potassium_mg: Number(potassium_mg) || 0,
       glycemic_index: Number(glycemic_index) || 55,
       iron_mg: Number(iron_mg) || 0,
       vitamin_c_mg: Number(vitamin_c_mg) || 0,
+
       date: req.body.date || Date.now()
     });
 
     await entry.save();
+
+    /* -------------------- STREAK SYSTEM -------------------- */
+
+    const user = await User.findById(userId);
+
+    if (user) {
+
+      const today = new Date();
+      today.setHours(0,0,0,0);
+
+      let last = null;
+
+      if(user.lastLogDate){
+        last = new Date(user.lastLogDate);
+        last.setHours(0,0,0,0);
+      }
+
+      if(!last){
+        // first ever log
+        user.streak = 1;
+      }
+      else{
+
+        const diffDays = (today - last) / (1000 * 60 * 60 * 24);
+
+        if(diffDays === 1){
+          // consecutive day
+          user.streak += 1;
+        }
+        else if(diffDays > 1){
+          // streak broken
+          user.streak = 1;
+        }
+        // if diffDays === 0 → already logged today → keep streak same
+      }
+
+      user.lastLogDate = today;
+
+      /* -------------------- BADGES -------------------- */
+
+      if(user.streak >= 1 && !user.badges.includes("Weekly Warrior")){
+        user.badges.push("Weekly Warrior");
+      }
+
+      if(user.streak >= 30 && !user.badges.includes("Nutrition Master")){
+        user.badges.push("Nutrition Master");
+      }
+
+      await user.save();
+    }
+
     console.log(`✅ Logged: ${productName} (Na: ${entry.sodium_mg}mg, K: ${entry.potassium_mg}mg)`);
+
     res.json(entry);
+
   } catch (err) {
     console.error("❌ Failed to add diary entry:", err);
     res.status(500).json({ error: "Failed to add diary entry" });
@@ -62,7 +116,7 @@ router.get('/:userId', async (req, res) => {
   }
 });
 
-// 1. DELETE an entry
+// DELETE an entry
 router.delete('/:id', async (req, res) => {
   try {
     await DiaryEntry.findByIdAndDelete(req.params.id);
@@ -72,51 +126,25 @@ router.delete('/:id', async (req, res) => {
   }
 });
 
-// 2. EDIT an entry
+// EDIT an entry
 router.put('/:id', async (req, res) => {
   try {
     const updatedEntry = await DiaryEntry.findByIdAndUpdate(
       req.params.id, 
       { 
         ...req.body,
-        // Ensure numbers are cast correctly if they were edited
         sodium_mg: Number(req.body.sodium_mg),
         potassium_mg: Number(req.body.potassium_mg),
         glycemic_index: Number(req.body.glycemic_index)
       }, 
       { new: true }
     );
+
     res.json(updatedEntry);
+
   } catch (err) {
     res.status(500).json({ error: "Failed to update" });
   }
 });
-
-// EMERGENCY ROUTE: Delete all logs for today for a specific user
-// Use 'router' instead of 'app' 
-// Also, remove the '/api/diary' prefix because it's already defined in server.js
-// router.delete('/clear-today/:userId', async (req, res) => {
-//   try {
-//     const { userId } = req.params;
-
-//     // Create boundaries for today
-//     const start = new Date();
-//     start.setHours(0, 0, 0, 0);
-
-//     const end = new Date();
-//     end.setHours(23, 59, 59, 999);
-
-//     const result = await DiaryEntry.deleteMany({
-//       userId: userId,
-//       date: { $gte: start, $lte: end }
-//     });
-
-//     console.log(`🧹 Deleted ${result.deletedCount} entries for user ${userId}`);
-//     res.json({ message: "Today's logs cleared!", deletedCount: result.deletedCount });
-//   } catch (err) {
-//     console.error("Delete Error:", err);
-//     res.status(500).json({ error: "Failed to clear logs" });
-//   }
-// });
 
 module.exports = router;

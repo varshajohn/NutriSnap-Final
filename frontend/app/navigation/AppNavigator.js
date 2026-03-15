@@ -14,7 +14,7 @@ import ScannerScreen from '../screens/ScannerScreen';
 import ProfileNavigator from './ProfileNavigator';
 import CameraScreen from '../screens/CameraScreen';
 import DetectionResultScreen from '../screens/DetectionResultScreen';
-
+import AchievementsScreen from "../screens/AchievementsScreen";
 const Tab = createBottomTabNavigator();
 const Stack = createNativeStackNavigator();
 
@@ -96,6 +96,10 @@ const AppNavigator = ({ onLogout, userId }) => (
     <Stack.Screen 
    name="DetectionResult"
    component={DetectionResultScreen}
+/>
+<Stack.Screen
+  name="Achievements"
+  component={AchievementsScreen}
 />
   </Stack.Navigator>
 );
