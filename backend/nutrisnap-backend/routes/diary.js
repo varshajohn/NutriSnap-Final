@@ -25,7 +25,17 @@ router.post('/add', async (req, res) => {
   }
 
   try {
+const now = new Date();
 
+// 🔥 force local IST date (remove timezone shift)
+const localDate = new Date(
+  now.getFullYear(),
+  now.getMonth(),
+  now.getDate(),
+  now.getHours(),
+  now.getMinutes(),
+  now.getSeconds()
+);
     const entry = new DiaryEntry({
       userId,
       productName,
@@ -41,7 +51,7 @@ router.post('/add', async (req, res) => {
       iron_mg: Number(iron_mg) || 0,
       vitamin_c_mg: Number(vitamin_c_mg) || 0,
 
-      date: req.body.date || Date.now()
+      date: req.body.date || localDate
     });
 
     await entry.save();
@@ -49,6 +59,9 @@ router.post('/add', async (req, res) => {
     /* -------------------- STREAK SYSTEM -------------------- */
 
     const user = await User.findById(userId);
+    if (!user.badges) {
+  user.badges = [];
+}
 
     if (user) {
 

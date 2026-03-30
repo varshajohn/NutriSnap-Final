@@ -17,7 +17,7 @@ import apiClient from '../../api/client';
 
 const DiaryScreen = ({ userId, navigation }) => {
   const [diaryData, setDiaryData] = useState([]);
-  const [recentMeals, setRecentMeals] = useState([]); // 🟢 State for Favorites
+  const [recentMeals, setRecentMeals] = useState([]); //  State for Favorites
   const [loading, setLoading] = useState(true);
 
   const fetchDiary = useCallback(async () => {
@@ -34,7 +34,10 @@ const DiaryScreen = ({ userId, navigation }) => {
 
       // 1. Process Data for SectionList (Group by Date)
       const grouped = entries.reduce((acc, entry) => {
-        const dateKey = new Date(entry.date).toISOString().split('T')[0];
+        const d = new Date(entry.date);
+
+//  LOCAL DATE (NO TIMEZONE SHIFT)
+const dateKey = `${d.getFullYear()}-${d.getMonth()}-${d.getDate()}`;
         if (!acc[dateKey]) acc[dateKey] = [];
         acc[dateKey].push(entry);
         return acc;
@@ -51,7 +54,7 @@ const DiaryScreen = ({ userId, navigation }) => {
 
       setDiaryData(sections);
 
-      // 2. 🟢 Extract Unique Recent Meals for "Quick Add"
+      // 2.  Extract Unique Recent Meals for "Quick Add"
       const uniqueMeals = Array.from(new Set(entries.map(a => a.productName)))
         .map(name => entries.find(a => a.productName === name))
         .slice(0, 8); // Show top 8 recent unique items
@@ -72,7 +75,7 @@ const DiaryScreen = ({ userId, navigation }) => {
     }, [fetchDiary])
   );
 
-  // 🟢 Logic: One-tap Quick Add
+  //  Logic: One-tap Quick Add
   const handleQuickAdd = async (meal) => {
     try {
       const payload = { 
@@ -112,7 +115,7 @@ const DiaryScreen = ({ userId, navigation }) => {
     navigation.navigate('ManualEntry', { userId, editItem: { ...item } });
   };
 
-  // 🟢 Component for the horizontal Quick Add list
+  //  Component for the horizontal Quick Add list
   const renderQuickAddHeader = () => (
     <View style={styles.quickAddContainer}>
       <Text style={styles.quickAddTitle}>Quick Add Recent</Text>
@@ -150,7 +153,7 @@ const DiaryScreen = ({ userId, navigation }) => {
       <SectionList
         sections={diaryData}
         keyExtractor={(item) => item._id?.toString() || Math.random().toString()}
-        ListHeaderComponent={renderQuickAddHeader} // 🟢 Add horizontal favorites at the top
+        ListHeaderComponent={renderQuickAddHeader} //  Add horizontal favorites at the top
         renderItem={({ item }) => (
           <DiaryEntryCard item={item} onDelete={handleDelete} onEdit={handleEdit} />
         )}
@@ -158,10 +161,14 @@ const DiaryScreen = ({ userId, navigation }) => {
           const ratio = (section.dailySodium / Math.max(section.dailyPotassium, 1)).toFixed(1);
           const isHigh = ratio > 1.2;
           const statusLabel = ratio < 1.0 ? "Optimal" : ratio < 1.5 ? "Fair" : "High Salt";
+          const [y, m, d] = section.title.split("-");
+  const displayDate = new Date(y, m, d);
 
           return (
             <View style={styles.sectionHeaderContainer}>
-              <Text style={styles.sectionHeader}>{section.title}</Text>
+              <Text style={styles.sectionHeader}>
+  {displayDate.toDateString()}
+</Text>
               <View style={[styles.ratioBadge, { backgroundColor: isHigh ? '#ffebee' : '#e8f5e9' }]}>
                 <Text style={[styles.ratioText, { color: isHigh ? "#d32f2f" : "#2E7D32" }]}>
                   {statusLabel}: {ratio}
@@ -188,7 +195,7 @@ const styles = StyleSheet.create({
   headerTitle: { fontSize: 24, fontWeight: 'bold', color: '#1B5E20' },
   list: { paddingHorizontal: 20, paddingBottom: 130 },
 
-  // 🟢 Quick Add Styles
+  //  Quick Add Styles
   quickAddContainer: { marginTop: 15, marginBottom: 10 },
   quickAddTitle: { fontSize: 16, fontWeight: 'bold', color: '#333', marginBottom: 12 },
   recentScroll: { flexDirection: 'row' },

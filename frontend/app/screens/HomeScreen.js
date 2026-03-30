@@ -7,7 +7,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { useNavigation, useFocusEffect } from '@react-navigation/native';
 import * as Progress from 'react-native-progress'; 
-import * as Haptics from 'expo-haptics'; // 🟢 Added Haptics
+import * as Haptics from 'expo-haptics'; //  Added Haptics
 import NutritionSummaryCard from '../components/NutritionSummaryCard';
 import apiClient from '../../api/client';
 
@@ -22,6 +22,7 @@ const HomeScreen = ({ userId }) => {
   const [infoModalVisible, setInfoModalVisible] = useState(false);
   const [period, setPeriod] = useState("monthly");
   const [calendarVisible, setCalendarVisible] = useState(false);
+  const [selectedBadge, setSelectedBadge] = useState(null);
 
   const shimmerValue = useRef(new Animated.Value(0.3)).current;
 
@@ -69,14 +70,14 @@ setRiskData(r);
   fetchHomeData();
 }, [period]);
 
-  // 🟢 Logic: User-Friendly Status Labels
+  //  Logic: User-Friendly Status Labels
   const getStatus = (val) => {
     if (val > 70) return { label: 'High Alert', color: '#FF5252', bg: '#FFEBEE' };
     if (val > 40) return { label: 'Caution', color: '#FFAB40', bg: '#FFF3E0' };
     return { label: 'Optimal', color: '#4CAF50', bg: '#E8F5E9' };
   };
 
-  // 🟢 Feature: Transparency (Show raw math on tile click)
+  //  Feature: Transparency (Show raw math on tile click)
   const showRawStats = (title) => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
     if (!riskData?.rawTotals) {
@@ -101,7 +102,7 @@ setRiskData(r);
     navigation.navigate('Chat', { initialMessage: prompts[type] });
   };
 
-  // 🟢 Feature: Skeleton Loader
+  //  Feature: Skeleton Loader
   if (loading && !user) {
     return (
       <SafeAreaView style={styles.container}>
@@ -117,8 +118,15 @@ setRiskData(r);
     );
   }
 
-  // 🟢 Feature: Empty States (For brand new users)
-  if (!riskData || (riskData.indices.hypertension === 0 && riskData.indices.diabetes === 0)) {
+  //  Feature: Empty States (For brand new users)
+  if (
+  !riskData ||
+  (
+    riskData.indices.hypertension === 0 &&
+    riskData.indices.diabetes === 0 &&
+    riskData.indices.obesity === 0
+  )
+) {
     return (
       <SafeAreaView style={styles.container}>
         <View style={styles.emptyStateContainer}>
@@ -166,12 +174,29 @@ for (let d = 1; d <= daysInMonth; d++) {
     );
   });
 
-  days.push(
-    <View key={d} style={styles.dayCell}>
-      <Text style={styles.dayText}>{d}</Text>
-      {badgeDay && <View style={styles.badgeDot}/>}
-    </View>
-  );
+ days.push(
+  <TouchableOpacity
+    key={d}
+    style={styles.dayCell}
+    onPress={() => {
+      if (badgeDay) {
+        setSelectedBadge({
+          day: d,
+          month: new Date().toLocaleString('default', { month: 'long' })
+        });
+      }
+    }}
+  >
+    <Text style={styles.dayText}>{d}</Text>
+
+    {badgeDay && (
+      <View style={styles.badgeContainerReal}>
+        <MaterialCommunityIcons name="star" size={11} color="#fff" />
+      </View>
+    )}
+
+  </TouchableOpacity>
+);
 }
   return (
     <SafeAreaView style={styles.container}>
@@ -229,13 +254,55 @@ for (let d = 1; d <= daysInMonth; d++) {
               <MaterialCommunityIcons name="shield-check" size={70} color="rgba(255,255,255,0.2)" />
             </View>
         )}
-        {/* 🔥 DAILY STREAK */}
-{riskData?.streak > 0 && (
-<View style={styles.streakCard}>
-  <Text style={styles.streakTitle}>🔥 {riskData.streak} Day Nutrition Streak</Text>
-  <Text style={styles.streakSub}>Keep logging meals to maintain your streak!</Text>
+        {/*  DAILY STREAK */}
+<View style={styles.streakCardNew}>
+
+  <View style={{flexDirection: "row", justifyContent: "space-between", alignItems: "center"}}>
+
+    <View>
+      <Text style={styles.streakCount}>
+  {riskData.streak || 0} Day Streak
+</Text>
+
+<Text style={styles.streakMsg}>
+  {riskData?.hasLoggedToday
+    ? "You're on track today"
+    : "Log today to keep your streak alive"}
+</Text>
+    </View>
+
+    <MaterialCommunityIcons name="fire" size={40} color="#FF7043" />
+
+  </View>
+
+{/* WEEK TRACKER */}
+<View style={styles.weekWrapper}>
+
+  {/* DAY LETTERS */}
+  <View style={styles.weekLabels}>
+    {riskData?.weekData?.map((day, index) => (
+      <Text key={index} style={styles.weekLabelText}>
+        {day.day[0]}
+      </Text>
+    ))}
+  </View>
+
+  {/* CIRCLES */}
+  <View style={styles.weekRowNew}>
+    {riskData?.weekData?.map((day, index) => (
+      <View
+        key={index}
+        style={[
+          styles.dayCircle,
+          day.logged ? styles.dayActive : styles.dayInactive
+        ]}
+      />
+    ))}
+  </View>
+
 </View>
-)}
+
+</View>
         {/* 2. RISK ANALYSIS GRID */}
         <View style={styles.riskDashboard}>
         <View style={styles.sectionHeaderRow}>
@@ -334,10 +401,29 @@ for (let d = 1; d <= daysInMonth; d++) {
       <Modal visible={infoModalVisible} transparent animationType="fade">
         <View style={styles.modalOverlay}>
             <View style={styles.modalContent}>
-                <Text style={styles.modalTitle}>Research Methodology</Text>
-                <Text style={styles.modalPara}><Text style={{fontWeight: 'bold'}}>Stability:</Text> Overall resilience based on 30-day data.</Text>
-                <Text style={styles.modalPara}><Text style={{fontWeight: 'bold'}}>Salt Balance:</Text> Based on Sodium-to-Potassium ratio targets (Ideal {"<"} 1.0).</Text>
-                <Text style={styles.modalPara}><Text style={{fontWeight: 'bold'}}>Sugar Spikes:</Text> Measures insulin demand using Glycemic Load.</Text>
+                <Text style={styles.modalTitle}>🏆 Your Achievements</Text>
+
+<Text style={styles.modalPara}>
+Each marked day means you maintained a balanced and healthy diet.
+</Text>
+
+<Text style={styles.modalPara}>
+To earn a badge:
+</Text>
+
+<Text style={styles.modalPara}>
+• Salt intake stayed within safe limits  
+• Sugar spikes were controlled  
+• Calorie intake stayed near your daily target  
+</Text>
+
+<Text style={styles.modalPara}>
+Badges are awarded at the end of each day based on your food logs.
+</Text>
+
+<Text style={styles.modalPara}>
+Tap on a highlighted day to view your achievement 🎉
+</Text>
                 <TouchableOpacity style={styles.closeBtn} onPress={() => setInfoModalVisible(false)}>
                     <Text style={styles.closeBtnText}>Got it!</Text>
                 </TouchableOpacity>
@@ -345,36 +431,93 @@ for (let d = 1; d <= daysInMonth; d++) {
         </View>
       </Modal>
       <Modal
-visible={calendarVisible}
-transparent
-animationType="fade"
+  visible={calendarVisible}
+  transparent
+  animationType="fade"
 >
-<View style={styles.modalOverlay}>
+  <View style={styles.modalOverlay}>
 
-<View style={styles.calendarCard}>
+    <View style={styles.calendarCard}>
 
-<View style={styles.calendarHeader}>
-<Text style={styles.calendarTitle}>March {new Date().getFullYear()}</Text>
+      {/* HEADER */}
+      <View style={styles.calendarHeader}>
 
-<TouchableOpacity onPress={() => setCalendarVisible(false)}>
-<MaterialCommunityIcons name="close" size={24} color="#333"/>
-</TouchableOpacity>
+        <Text style={styles.calendarTitle}>
+          March {new Date().getFullYear()}
+        </Text>
 
-</View>
+        <View style={{ flexDirection: "row", alignItems: "center" }}>
 
-<View style={styles.weekRow}>
-{["Mon","Tue","Wed","Thu","Fri","Sat","Sun"].map(d => (
-<Text key={d} style={styles.weekDay}>{d}</Text>
-))}
-</View>
+          <TouchableOpacity 
+            onPress={() => setInfoModalVisible(true)}
+            style={{ marginRight: 10 }}
+          >
+            <MaterialCommunityIcons 
+              name="information-outline" 
+              size={22} 
+              color="#2E7D32"
+            />
+          </TouchableOpacity>
 
-<View style={styles.calendarGrid}>
-{days}
-</View>
+          <TouchableOpacity onPress={() => setCalendarVisible(false)}>
+            <MaterialCommunityIcons name="close" size={24} color="#333"/>
+          </TouchableOpacity>
 
-</View>
+        </View>
 
-</View>
+      </View>
+
+      {/* WEEK LABELS */}
+      <View style={styles.weekRow}>
+        {["Mon","Tue","Wed","Thu","Fri","Sat","Sun"].map(d => (
+          <Text key={d} style={styles.weekDay}>{d}</Text>
+        ))}
+      </View>
+
+      {/* CALENDAR GRID */}
+      <View style={styles.calendarGrid}>
+        {days}
+      </View>
+
+    </View>
+
+  </View>
+</Modal>
+<Modal
+  visible={!!selectedBadge}
+  transparent
+  animationType="fade"
+>
+  <View style={styles.modalOverlay}>
+
+    <View style={styles.modalContent}>
+
+      <Text style={styles.modalTitle}>🎉 Achievement Unlocked</Text>
+
+      <Text style={styles.modalPara}>
+        You maintained a balanced diet on
+      </Text>
+
+      <Text style={{ fontWeight: "bold", fontSize: 16, marginBottom: 10 }}>
+        {selectedBadge?.day} {selectedBadge?.month}
+      </Text>
+
+      <Text style={styles.modalPara}>
+        ✔ Salt intake controlled{"\n"}
+        ✔ Sugar spikes stable{"\n"}
+        ✔ Calories well managed
+      </Text>
+
+      <TouchableOpacity
+        style={styles.closeBtn}
+        onPress={() => setSelectedBadge(null)}
+      >
+        <Text style={styles.closeBtnText}>Nice! 💪</Text>
+      </TouchableOpacity>
+
+    </View>
+
+  </View>
 </Modal>
     </SafeAreaView>
   );
@@ -455,7 +598,90 @@ const styles = StyleSheet.create({
   padding: 4,
   marginBottom: 10
 },
+badgeCircle: {
+  width: 14,
+  height: 14,
+  borderRadius: 7,
+  backgroundColor: "#4CAF50",
+  justifyContent: "center",
+  alignItems: "center",
+  marginTop: 3
+},
+streakCardNew: {
+  backgroundColor: "#FFF3E0",
+  padding: 18,
+  borderRadius: 20,
+  marginTop: 15,
+  borderWidth: 1,
+  borderColor: "#FFE0B2"
+},
+weekWrapper: {
+  marginTop: 15
+},
 
+weekLabels: {
+  flexDirection: "row",
+  justifyContent: "space-between",
+  marginBottom: 6
+},
+
+weekLabelText: {
+  width: 18,
+  textAlign: "center",
+  fontSize: 10,
+  color: "#8D6E63",
+  fontWeight: "600"
+},
+streakCount: {
+  fontSize: 18,
+  fontWeight: "bold",
+  color: "#E65100"
+},
+
+streakMsg: {
+  fontSize: 12,
+  color: "#6D4C41",
+  marginTop: 4
+},
+
+weekRowNew: {
+  flexDirection: "row",
+  justifyContent: "space-between",
+  marginTop: 15
+},
+
+dayCircle: {
+  width: 18,
+  height: 18,
+  borderRadius: 10
+},
+
+dayActive: {
+  backgroundColor: "#FF7043"
+},
+
+dayInactive: {
+  backgroundColor: "#E0E0E0"
+},
+badgeContainerReal: {
+  width: 20,
+  height: 20,
+  borderRadius: 13,
+  justifyContent: "center",
+  alignItems: "center",
+  marginTop: 4,
+
+  backgroundColor: "#FFD700",
+
+  elevation: 5,
+  shadowColor: "#000",
+  shadowOpacity: 0.3,
+  shadowRadius: 4,
+  shadowOffset: { width: 0, height: 2 },
+
+  borderWidth: 2,
+  borderColor: "#FFF3B0"   // ✨ soft highlight
+},
 toggleBtn: {
   flex: 1,
   paddingVertical: 6,
@@ -519,10 +745,11 @@ fontWeight:"600",
 color:"#2E7D32"
 },
 calendarCard:{
-backgroundColor:"#FFF",
-borderRadius:20,
-padding:20,
-width:"90%"
+  backgroundColor:"#FFF",
+  borderRadius:20,
+  padding:20,
+  width:"90%",
+  maxHeight: "80%"   // 👈 ADD THIS
 },
 
 calendarHeader:{

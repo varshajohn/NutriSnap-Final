@@ -8,6 +8,7 @@ import { MaterialCommunityIcons } from '@expo/vector-icons';
 const CameraScreen = ({ navigation, route }) => {
 
   const userId = route.params?.userId;
+  console.log(" Camera userId:", userId);
 
   const [permission, requestPermission] = useCameraPermissions();
   const cameraRef = useRef(null);

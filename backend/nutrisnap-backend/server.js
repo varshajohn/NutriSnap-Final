@@ -32,13 +32,14 @@ const upload = multer({ storage });
 
 /* -------------------- DB -------------------- */
 mongoose.connect(process.env.MONGO_URI)
-  .then(() => console.log('✅ Connected to MongoDB: dietDB'))
-  .catch(err => console.error('❌ MongoDB Connection error:', err));
+  .then(() => console.log(' Connected to MongoDB: dietDB'))
+  .catch(err => console.error(' MongoDB Connection error:', err));
 
 /* -------------------- HELPER: QUICK RISK PROFILE FOR AI -------------------- */
 async function getQuickRiskProfile(userId) {
   try {
     const logs = await DiaryEntry.find({ userId }).sort({ date: -1 }).limit(15);
+
     if (logs.length < 3) return "New user: Insufficient data for clinical profiling.";
 
     let totals = { sodium: 0, potassium: 0, gl: 0 };
@@ -58,21 +59,94 @@ app.get('/', (req, res) => {
   res.send('NutriSnap Smart Health Backend is running...');
 });
 
-/* -------------------- 🟢 SMART RISK ENGINE (FINAL) -------------------- */
+/* --------------------  SMART RISK ENGINE (FINAL) -------------------- */
 app.get('/api/health/risk-assessment', async (req, res) => {
   try {
-    const { userId } = req.query;
-    const user = await User.findById(userId);
-   const period = req.query.period === "weekly" ? 7 : 30;
-const startDate = new Date(Date.now() - period * 24 * 60 * 60 * 1000);
-    const logs = await DiaryEntry.find({ userId, date: { $gte: startDate } });
+    const { userId, period } = req.query;
+
+const user = await User.findById(userId);
+
+if (!user) {
+  return res.status(404).json({ error: "User not found" });
+}
+   let startDate;
+const now = new Date();
+
+if (req.query.period === "weekly") {
+  startDate = new Date();
+  startDate.setDate(now.getDate() - 7);
+} else {
+  //  CURRENT MONTH FIX
+  startDate = new Date(now.getFullYear(), now.getMonth(), 1);
+}
+    const logs = await DiaryEntry.find({ 
+  userId, 
+  date: { $gte: startDate },
+  isDeleted: { $ne: true }   //  ADD THIS
+});
+    // ---------------- STREAK LOGIC ----------------
+
+const logDates = [
+  ...new Set(logs.map(l => new Date(l.date).toDateString()))
+];
+
+const today = new Date();
+const todayStr = today.toDateString();
+
+const hasLoggedToday = logDates.includes(todayStr);
+
+let streak = 0;
+let current = new Date();
+
+if (!hasLoggedToday) {
+  current.setDate(current.getDate() - 1);
+}
+
+while (true) {
+  const currentStr = current.toDateString();
+
+  if (logDates.includes(currentStr)) {
+    streak++;
+    current.setDate(current.getDate() - 1);
+  } else {
+    break;
+  }
+}
+
+// WEEK DATA (for UI)
+const weekData = [];
+
+for (let i = 6; i >= 0; i--) {
+  const d = new Date();
+  d.setDate(d.getDate() - i);
+
+  weekData.push({
+    day: d.toLocaleDateString('en-US', { weekday: 'short' }),
+    logged: logDates.includes(d.toDateString())
+  });
+}
 
     if (logs.length < 5) {
-      return res.json({ status: "Gathering Data", message: "Log 5+ meals to unlock clinical report." });
+  return res.json({
+    status: "Insufficient Data",
+    message: "Log at least 5 meals",
+    indices: {
+      hypertension: 0,
+      diabetes: 0,
+      obesity: 0,
+      anemia: 0
     }
+  });
+}
 
-    const uniqueDays = [...new Set(logs.map(l => new Date(l.date).toDateString()))].length;
-    const daysFactor = uniqueDays || 1;
+const uniqueDays = [
+  ...new Set(logs.map(l => new Date(l.date).toDateString()))
+].length;
+
+const daysFactor = Math.max(
+  uniqueDays,
+  period === "weekly" ? 7 : 30
+);
 
     let totals = { sodium: 0, potassium: 0, gl: 0, cals: 0, iron: 0, carbs: 0 };
     logs.forEach(log => {
@@ -91,42 +165,115 @@ const startDate = new Date(Date.now() - period * 24 * 60 * 60 * 1000);
     // 2. DIABETES (Glycemic Load)
     const dRisk = Math.min(((totals.gl / daysFactor) / 150) * 100, 100);
 
-    // 3. OBESITY (Surplus vs TDEE)
-    const bmr = (10 * (user.weight || 70)) + (6.25 * (user.height || 170)) - (5 * (user.age || 25)) + (user.gender === 'female' ? -161 : 5);
-    const tdee = bmr * 1.3;
-    const oRisk = Math.min((Math.max(0, (totals.cals / daysFactor) - tdee) / 500) * 100, 100);
+  // 3. OBESITY (Surplus vs TDEE)
+
+// 1. Calculate BMR & TDEE (Keep this consistent)
+const bmr = (10 * (user.weight || 70)) +
+            (6.25 * (user.height || 170)) -
+            (5 * (user.age || 25)) +
+            (user.gender === 'female' ? -161 : 5);
+
+const tdee = bmr * 1.3;
+
+// 2. Normalize Intake based on the toggle
+let currentIntake = 0;
+
+if (period === 'daily') {
+    // Logic for the 'Today' view
+    currentIntake = logs
+        .filter(l => new Date(l.date).toDateString() === new Date().toDateString())
+        .reduce((sum, l) => sum + (Number(l.calories) || 0), 0);
+} else {
+    // Logic for Weekly/Monthly (Calculates Daily Average)
+    // IMPORTANT: Ensure daysFactor is 7 for weekly and 30 for monthly
+    const totalCals = Number(totals.cals) || 0;
+    const factor = Number(daysFactor) || 1;
+    currentIntake = totalCals / factor;
+}
+
+// 3. Calculate Difference from Maintenance
+const calorieDiff = currentIntake - tdee;
+
+// 4. Calculate oRisk (0 to 100)
+let calculatedRisk = 0;
+
+if (calorieDiff > 0) {
+    // SURPLUS: Risk moves from 10% to 100%
+    // We reach 100% risk if the user is 500+ calories over their TDEE
+    calculatedRisk = 10 + (calorieDiff / 500) * 90;
+} else {
+    // DEFICIT: Risk stays very low (0% to 10%)
+    // This provides a "smooth" transition instead of just 0.
+    calculatedRisk = Math.max(10 + (calorieDiff / 500) * 10, 0);
+}
+
+// 5. Final Clamp (Ensure it never goes below 0 or above 100)
+const oRisk = Math.min(Math.max(calculatedRisk, 0), 100);
+
+console.log(`Period: ${period} | Avg Intake: ${currentIntake.toFixed(0)} | TDEE: ${tdee.toFixed(0)} | Risk: ${oRisk.toFixed(1)}%`);
 
     // 4. ANEMIA
    const aRisk = (totals.iron / daysFactor) < (user.gender === 'female' ? 18 : 8) ? 65 : 15;
 
-// ⭐ Balanced Day Badge Logic
+//  FIXED BADGE LOGIC (END OF DAY)
 
 if (!user.dailyBadges) user.dailyBadges = [];
 
-const today = new Date();
-today.setHours(0,0,0,0);
+//  yesterday start
+const yesterdayStart = new Date();
+yesterdayStart.setDate(yesterdayStart.getDate() - 1);
+yesterdayStart.setHours(0,0,0,0);
 
-const todayLogs = logs.filter(l => {
-  const d = new Date(l.date);
-  d.setHours(0,0,0,0);
-  return d.getTime() === today.getTime();
+//  yesterday end
+const yesterdayEnd = new Date(yesterdayStart);
+yesterdayEnd.setHours(23,59,59,999);
+
+//  fetch ONLY yesterday logs
+const yesterdayLogs = await DiaryEntry.find({
+  userId,
+  date: { $gte: yesterdayStart, $lte: yesterdayEnd }
 });
 
-if (todayLogs.length > 0) {
+if (yesterdayLogs.length > 0) {
 
   const alreadyExists = user.dailyBadges.find(b =>
-    new Date(b.date).toDateString() === today.toDateString()
+    new Date(b.date).toDateString() === yesterdayStart.toDateString()
   );
 
+  //  calculate totals for yesterday
+  const yTotals = { sodium: 0, potassium: 0, carbs: 0, cals: 0 };
+
+  yesterdayLogs.forEach(l => {
+    yTotals.sodium += l.sodium_mg || 0;
+    yTotals.potassium += l.potassium_mg || 0;
+    yTotals.carbs += l.carbs || 0;
+    yTotals.cals += l.calories || 0;
+  });
+
+  //  calculate risks
+  const yNaK = yTotals.sodium / Math.max(yTotals.potassium, 500);
+  const yHRisk = yNaK <= 1 ? yNaK * 20 : 20 + ((yNaK - 1) * 35);
+
+  const yDRisk = Math.min(((yTotals.carbs) / 150) * 100, 100);
+
+  const yDiff = yTotals.cals - tdee;
+  let yORisk = yDiff > 0 ? Math.min((yDiff / 500) * 100, 100) : 10;
+
   const isBalancedDay =
-    hRisk < 40 &&
-    dRisk < 40 &&
-    oRisk < 40;
+    yHRisk < 40 &&
+    yDRisk < 40 &&
+    yORisk < 40;
+
+
+    const badgeDate = new Date(yesterdayStart);
+
+    //  FIX: force IST date (remove timezone shift)
+    badgeDate.setHours(12, 0, 0, 0); 
 
   if (isBalancedDay && !alreadyExists) {
 
     user.dailyBadges.push({
-      date: today,
+      date: badgeDate,
       badge: "Balanced Day"
     });
 
@@ -168,7 +315,9 @@ if (todayLogs.length > 0) {
 
   badgesCalendar: user.dailyBadges || [],
 
-  streak: user.streak || 0,
+  streak: streak,
+hasLoggedToday,
+weekData,
 
   isBiometricsComplete: !!(user.weight && user.height && user.age)
 });
@@ -202,7 +351,7 @@ app.post('/api/scan/analyze', async (req, res) => {
     const n = p.nutriments;
     const ingredientsText = p.ingredients_text || "Ingredients not listed";
 
-    // 🟢 NEW: AI SAFETY AUDIT (This handles the different languages)
+    //  NEW: AI SAFETY AUDIT (This handles the different languages)
     let aiDetectedAllergens = [];
     if (allergies.length > 0 && ingredientsText !== "Ingredients not listed") {
       try {
@@ -246,11 +395,11 @@ app.post('/api/scan/analyze', async (req, res) => {
   } catch (err) { res.status(500).json({ error: "Scan Error" }); }
 });
 
-/* -------------------- 🌐 INGREDIENT TRANSLATOR -------------------- */
+/* --------------------  INGREDIENT TRANSLATOR -------------------- */
 app.post('/api/scan/translate', async (req, res) => {
   const { text } = req.body;
   
-  console.log("🌐 Translation Request Received for:", text?.substring(0, 20) + "...");
+  console.log(" Translation Request Received for:", text?.substring(0, 20) + "...");
 
   if (!text || text === "Ingredients not listed") {
     return res.status(400).json({ error: "No valid ingredients to translate" });
@@ -275,16 +424,16 @@ app.post('/api/scan/translate', async (req, res) => {
     });
 
     const translatedText = response.data.choices[0].message.content;
-    console.log("✅ Translation Successful");
+    console.log(" Translation Successful");
     res.json({ translatedText });
 
   } catch (err) {
-    console.error("❌ Groq Translation Error:", err.response?.data || err.message);
+    console.error(" Groq Translation Error:", err.response?.data || err.message);
     res.status(500).json({ error: "AI translation failed" });
   }
 });
 
-/* -------------------- 👤 USER & AUTH -------------------- */
+/* --------------------  USER & AUTH -------------------- */
 app.get('/api/user/:id', async (req, res) => {
     try {
       const user = await User.findById(req.params.id).select('-password');
@@ -319,7 +468,7 @@ app.post('/api/register', async (req, res) => {
 
 
 
-/* -------------------- 📊 DIARY & SUMMARY -------------------- */
+/* --------------------  DIARY & SUMMARY -------------------- */
 app.get('/api/todaySummary', async (req, res) => {
     try {
       const start = new Date(); start.setHours(0,0,0,0);
@@ -361,7 +510,7 @@ app.post('/api/scan/compare-logic', async (req, res) => {
   } catch (err) { res.status(500).json({ error: "Comparison Error" }); }
 });
 
-/* -------------------- 🤖 AI COACH (CONTEXT AWARE) -------------------- */
+/* --------------------  AI COACH (CONTEXT AWARE) -------------------- */
 app.post("/api/chat", async (req, res) => {
     try {
         const { history, userId } = req.body;
@@ -386,7 +535,7 @@ app.post("/api/chat", async (req, res) => {
     } catch (error) { res.status(500).json({ error: "Chat Error" }); }
 });
 
-/* -------------------- 🧠 YOLO FOOD DETECTION -------------------- */
+/* --------------------  YOLO FOOD DETECTION -------------------- */
 app.post("/api/detect-food", upload.single("image"), async (req, res) => {
 
   if (!req.file) {
@@ -452,7 +601,7 @@ res.json({ detections: enrichedDetections });
   });
 });
 
-/* -------------------- 🧠 FOOD RECOMMENDATION ENGINE -------------------- */
+/* --------------------  FOOD RECOMMENDATION ENGINE -------------------- */
 app.post("/api/recommend-food", async (req, res) => {
   try {
 
@@ -573,5 +722,5 @@ Return ONLY JSON in this format:
 /* -------------------- START SERVER -------------------- */
 const PORT = process.env.PORT || 3000;
 app.listen(PORT, '0.0.0.0', () => {
-  console.log(`🚀 NutriSnap Smart Backend Running on port ${PORT}`);
+  console.log(` NutriSnap Smart Backend Running on port ${PORT}`);
 });
