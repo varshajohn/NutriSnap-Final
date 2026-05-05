@@ -6,7 +6,6 @@ const bcrypt = require('bcryptjs');
 const axios = require('axios');
 const User = require('./models/User');
 const DiaryEntry = require('./models/DiaryEntry');
-
 const app = express();
 const { execFile } = require("child_process");
 const multer = require("multer");
@@ -16,7 +15,8 @@ const allergenData = require("./data/allergens.json");
 
 /* -------------------- MIDDLEWARE -------------------- */
 app.use(cors());
-app.use(express.json({ limit: '10mb' }));
+app.use(express.json({ limit: '50mb' }));
+app.use(express.urlencoded({ limit: '50mb', extended: true }));
 
 /* -------------------- 📦 MULTER CONFIG -------------------- */
 const storage = multer.diskStorage({
@@ -70,14 +70,14 @@ if (!user) {
   return res.status(404).json({ error: "User not found" });
 }
    let startDate;
-const now = new Date();
+const baseDate = new Date();
 
 if (req.query.period === "weekly") {
   startDate = new Date();
-  startDate.setDate(now.getDate() - 7);
+  startDate.setDate(baseDate.getDate() - 7);
 } else {
   //  CURRENT MONTH FIX
-  startDate = new Date(now.getFullYear(), now.getMonth(), 1);
+  startDate = new Date(baseDate.getFullYear(), baseDate.getMonth(), 1);
 }
     const logs = await DiaryEntry.find({ 
   userId, 
@@ -259,10 +259,22 @@ if (yesterdayLogs.length > 0) {
   const yDiff = yTotals.cals - tdee;
   let yORisk = yDiff > 0 ? Math.min((yDiff / 500) * 100, 100) : 10;
 
-  const isBalancedDay =
-    yHRisk < 40 &&
-    yDRisk < 40 &&
-    yORisk < 40;
+  let score = 0;
+
+// 1. Salt check (hypertension)
+if (yHRisk < 60) score++;
+
+// 2. Carb check (diabetes proxy)
+if (yTotals.carbs < 250) score++;
+
+// 3. Calorie check (obesity)
+if (yORisk < 60) score++;
+
+// 4. Minimum food activity (user actually ate something)
+if (yTotals.cals > 300) score++;
+
+// FINAL DECISION
+const isBalancedDay = score >= 3;
 
 
     const badgeDate = new Date(yesterdayStart);
@@ -281,18 +293,50 @@ if (yesterdayLogs.length > 0) {
   }
 }
 
-    // 5. DYNAMIC AI INSIGHT (Groq Powered)
-    let dynamicInsight = "";
-    try {
-        const aiRes = await axios.post("https://api.groq.com/openai/v1/chat/completions", {
+ // 5. DYNAMIC AI INSIGHT (Groq Powered)
+let dynamicInsight = "";
+try {
+    const aiRes = await axios.post(
+        "https://api.groq.com/openai/v1/chat/completions",
+        {
             model: "llama-3.3-70b-versatile",
-            messages: [{ role: "system", content: `Nutritionist: Review scores (BP:${Math.round(hRisk)}%, Sugar:${Math.round(dRisk)}%, Weight:${Math.round(oRisk)}%). Give ONE encouraging sentence and a specific food swap.` }],
+            messages: [
+                {
+                    role: "system",
+                    content: `Nutritionist: Review scores (BP:${Math.round(hRisk)}%, Sugar:${Math.round(dRisk)}%, Weight:${Math.round(oRisk)}%). Give ONE encouraging sentence and a specific food swap.`
+                }
+            ],
             temperature: 0.7
-        }, { headers: { "Authorization": `Bearer ${process.env.GROQ_API_KEY}` } });
-        dynamicInsight = aiRes.data.choices[0].message.content;
-    } catch (e) { dynamicInsight = "Keep balancing your greens and proteins for optimal stability."; }
+        },
+        {
+            headers: {
+                Authorization: `Bearer ${process.env.GROQ_API_KEY}`
+            }
+        }
+    );
 
-    res.json({
+    dynamicInsight = aiRes.data.choices[0].message.content;
+
+} catch (e) {
+    dynamicInsight = "Keep balancing your greens and proteins for optimal stability.";
+}
+
+
+// ✅ ADD THIS BLOCK (DO NOT MOVE INSIDE res.json)
+const todayDate = new Date();
+todayDate.setHours(0, 0, 0, 0);
+
+const monthStart = new Date(todayDate.getFullYear(), todayDate.getMonth(), 1);
+const monthEnd = new Date(todayDate.getFullYear(), todayDate.getMonth() + 1, 0);
+
+const filteredBadges = (user.dailyBadges || []).filter(b => {
+    const d = new Date(b.date);
+    d.setHours(0, 0, 0, 0);
+    return d >= monthStart && d <= monthEnd;
+});
+
+// ✅ RESPONSE (ONLY CHANGE = filteredBadges)
+res.json({
   status: "Success",
 
   indices: {
@@ -302,42 +346,75 @@ if (yesterdayLogs.length > 0) {
     anemia: Math.round(aRisk)
   },
 
-  rawTotals:{
+  rawTotals: {
     sodium: totals.sodium,
     potassium: totals.potassium,
     carbs: totals.carbs,
     avgGI: Math.round(totals.gl / (totals.carbs / 100 || 1))
   },
 
-  insights:[dynamicInsight],
+  insights: [dynamicInsight],
 
   healthStability: 100 - Math.round((hRisk + dRisk + oRisk) / 3),
 
-  badgesCalendar: user.dailyBadges || [],
+  // ✅ FIXED LINE
+  badgesCalendar: filteredBadges,
 
   streak: streak,
-hasLoggedToday,
-weekData,
+  hasLoggedToday,
+  weekData,
 
   isBiometricsComplete: !!(user.weight && user.height && user.age)
 });
-  } catch (err) { res.status(500).json({ error: "Risk Engine Error" }); }
+} catch (err) {
+  console.error(err);
+  res.status(500).json({ error: "Risk Engine Error" });
+}
 });
-
 /* -------------------- 📸 AI SNAP (IMAGE ANALYSIS) -------------------- */
 app.post('/api/scan/image', async (req, res) => {
     try {
       const { imageBase64 } = req.body;
       const prompt = `Analyze this food image. Return JSON ONLY: { "name": string, "calories": number, "ingredients": string, "carbs": number, "protein": number, "fat": number, "sugar": number, "sodium_mg": number, "potassium_mg": number, "glycemic_index": number, "iron_mg": number, "vitamin_c_mg": number }`;
   
-      const response = await axios.post("https://api.groq.com/openai/v1/chat/completions", {
-          model: "llama-3.2-11b-vision-preview",
-          messages: [{ role: "user", content: [{ type: "text", text: prompt }, { type: "image_url", image_url: { url: `data:image/jpeg;base64,${imageBase64}` } }] }],
-          response_format: { type: "json_object" }
-        }, { headers: { Authorization: `Bearer ${process.env.GROQ_API_KEY}` } }
-      );
+      const response = await axios.post(
+  "https://api.groq.com/openai/v1/chat/completions",
+  {
+    model: "llama-3.2-11b-vision-preview",
+    messages: [
+      {
+        role: "system",
+        content: "You are a food recognition AI. Identify the food and estimate nutrition."
+      },
+      {
+        role: "user",
+        content: `Analyze this food image and return JSON:
+{
+  "name": string,
+  "calories": number,
+  "carbs": number,
+  "protein": number,
+  "fat": number,
+  "sugar": number,
+  "sodium_mg": number,
+  "potassium_mg": number
+}
+
+IMAGE BASE64:
+${imageBase64.substring(0, 10000)}`
+      }
+    ],
+    response_format: { type: "json_object" }
+  },
+  {
+    headers: { Authorization: `Bearer ${process.env.GROQ_API_KEY}` }
+  }
+);
       res.json(JSON.parse(response.data.choices[0].message.content));
-    } catch (err) { res.status(500).json({ error: "Vision AI Failed" }); }
+    } catch (err) {
+  console.error("Vision ERROR:", err.response?.data || err.message);
+  res.status(500).json({ error: "Vision AI Failed" });
+}
 });
 
 /* -------------------- 🔍 BARCODE ANALYSIS -------------------- */
@@ -560,7 +637,6 @@ app.post("/api/detect-food", upload.single("image"), async (req, res) => {
 
     try {
       const detections = JSON.parse(stdout);
-
 const userId = req.body.userId;
 
 let userAllergies = [];
@@ -571,6 +647,62 @@ if (userId) {
   userAllergies = (user?.allergies || []).map(a =>
     a.toLowerCase().replace(/s$/, "")
   );
+}
+      // 🔥 STEP 1: Check if YOLO failed
+const validDetection = detections.length > 0 && detections[0].confidence > 0.6;
+
+if (!validDetection) {
+
+  console.log("⚠ YOLO failed — using AI Vision fallback");
+
+  try {
+    const fs = require("fs");
+    const base64 = fs.readFileSync(imagePath, { encoding: "base64" });
+
+    // 🔥 Call your OWN Vision API
+    const aiRes = await axios.post("https://unsubscribed-brittney-superably.ngrok-free.dev/api/scan/image", {
+      imageBase64: base64
+    });
+
+    const aiData = aiRes.data;
+
+    const key = aiData.name.toLowerCase().replace(/\s/g, "");
+
+    const foodAllergens = allergenData[key] || [];
+
+    const detectedAllergens = foodAllergens.filter(a =>
+      userAllergies.includes(a.toLowerCase())
+    );
+
+    return res.json({
+      detections: [{
+        label: aiData.name,
+        confidence: 0.85,
+        nutrition: {
+          calories: aiData.calories,
+          protein: aiData.protein,
+          carbs: aiData.carbs,
+          fat: aiData.fat,
+          sugar: aiData.sugar,
+          fiber: 0,
+          sodium: aiData.sodium_mg,
+          potassium: aiData.potassium_mg
+        },
+        allergens: foodAllergens,
+        allergenWarning: detectedAllergens.length > 0,
+        detectedAllergens
+      }]
+    });
+
+  } catch (err) {
+  console.error("❌ Vision fallback failed:", err.message);
+
+  // ✅ IMPORTANT: trigger manual mode instead of error
+  return res.json({
+    detections: [],
+    fallback: true
+  });
+}
 }
 
 const enrichedDetections = detections.map(d => {
@@ -718,7 +850,52 @@ Return ONLY JSON in this format:
     res.status(500).json({ error: "Recommendation failed" });
   }
 });
+app.post("/api/manual-nutrition", async (req, res) => {
+  try {
+    const { food } = req.body;
 
+    const response = await axios.post(
+      "https://api.groq.com/openai/v1/chat/completions",
+      {
+        model: "llama-3.3-70b-versatile",
+        messages: [
+          {
+            role: "system",
+            content: `You are a nutrition expert. Return ONLY JSON:
+{
+  "calories": number,
+  "carbs": number,
+  "protein": number,
+  "fat": number,
+  "sugar": number,
+  "sodium": number,
+  "potassium": number
+}`
+          },
+          {
+            role: "user",
+            content: `Give approximate nutrition values for ${food}`
+          }
+        ],
+        response_format: { type: "json_object" }
+      },
+      {
+        headers: { Authorization: `Bearer ${process.env.GROQ_API_KEY}` }
+      }
+    );
+
+    const data = JSON.parse(response.data.choices[0].message.content);
+
+    res.json({
+      label: food,
+      nutrition: data
+    });
+
+  } catch (err) {
+    console.error("Manual nutrition error:", err);
+    res.status(500).json({ error: "Failed to fetch nutrition" });
+  }
+});
 /* -------------------- START SERVER -------------------- */
 const PORT = process.env.PORT || 3000;
 app.listen(PORT, '0.0.0.0', () => {

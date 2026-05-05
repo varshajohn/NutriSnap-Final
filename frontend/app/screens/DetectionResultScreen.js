@@ -9,29 +9,22 @@ import {
   ScrollView
 } from 'react-native';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
-
+import { TextInput } from 'react-native';
 const DetectionResultScreen = ({ route, navigation }) => {
 
   const [recommendation, setRecommendation] = useState(null);
   const [loadingRecommendation, setLoadingRecommendation] = useState(true);
-
+const [manualFood, setManualFood] = useState("");
   const detections = route.params?.detections;
   const userId = route.params?.userId;
+const detection = detections && detections.length > 0 ? detections[0] : null;
+const label = detection?.label;
+const nutrition = detection?.nutrition;
+const allergenWarning = detection?.allergenWarning;
+const detectedAllergens = detection?.detectedAllergens;
 
-  if (!detections || detections.length === 0) {
-    return (
-      <SafeAreaView style={styles.center}>
-        <Text>No detection result found.</Text>
-      </SafeAreaView>
-    );
-  }
-
-  const detection = detections[0];
-
-  const { label, nutrition, allergenWarning, detectedAllergens } = detection;
-
-  console.log("Detection Data:", detection);
-  console.log("Nutrition Data:", detection.nutrition);
+ console.log("Detection Data:", detection);
+console.log("Nutrition Data:", detection?.nutrition);
   console.log("UserId received:", userId);
 
   useEffect(() => {
@@ -121,8 +114,98 @@ const DetectionResultScreen = ({ route, navigation }) => {
       alert("Failed to add food to diary");
     }
   };
+const handleManualSelect = async (food) => {
+  if (!food) return;
 
+  try {
+    const res = await apiClient("manual-nutrition", "POST", { food });
 
+    navigation.replace("DetectionResult", {
+      detections: [{
+        label: res.label,
+        confidence: 1,
+        nutrition: res.nutrition,
+        allergens: [],
+        allergenWarning: false,
+        detectedAllergens: []
+      }],
+      userId
+    });
+
+  } catch (err) {
+    console.log("Manual fetch error:", err);
+    alert("Failed to fetch nutrition");
+  }
+};
+ if (!detections || detections.length === 0) {
+
+  if (route.params?.fallback) {
+  return (
+  <SafeAreaView style={styles.container}>
+    
+    <View style={{ flex: 1, justifyContent: "center" }}>
+
+      <Text style={{
+        fontSize: 22,
+        fontWeight: "600",
+        textAlign: "center",
+        marginBottom: 10
+      }}>
+        Oops! Couldn't detect your food
+      </Text>
+
+      <Text style={{
+        textAlign: "center",
+        color: "#666",
+        marginBottom: 30
+      }}>
+        Please enter the food manually to continue
+      </Text>
+
+      <TextInput
+        placeholder="e.g. Idli, Chicken Curry, Salad..."
+        value={manualFood}
+        onChangeText={setManualFood}
+        style={{
+          borderWidth: 1,
+          borderColor: "#ddd",
+          padding: 14,
+          borderRadius: 12,
+          marginBottom: 20,
+          backgroundColor: "#fff"
+        }}
+      />
+
+      <TouchableOpacity
+        style={{
+          backgroundColor: "#2E7D32",
+          paddingVertical: 16,
+          borderRadius: 12,
+          alignItems: "center"
+        }}
+        onPress={() => handleManualSelect(manualFood)}
+      >
+        <Text style={{
+          color: "#fff",
+          fontWeight: "600",
+          fontSize: 16
+        }}>
+          Continue
+        </Text>
+      </TouchableOpacity>
+
+    </View>
+
+  </SafeAreaView>
+);
+  }
+
+  return (
+    <SafeAreaView style={styles.center}>
+      <Text>No detection result found.</Text>
+    </SafeAreaView>
+  );
+}
   return (
     <SafeAreaView style={styles.container}>
       <ScrollView contentContainerStyle={{ paddingBottom: 40 }}>

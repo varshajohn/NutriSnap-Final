@@ -23,8 +23,9 @@ const HomeScreen = ({ userId }) => {
   const [period, setPeriod] = useState("monthly");
   const [calendarVisible, setCalendarVisible] = useState(false);
   const [selectedBadge, setSelectedBadge] = useState(null);
-
+const [scanModalVisible, setScanModalVisible] = useState(false);
   const shimmerValue = useRef(new Animated.Value(0.3)).current;
+  const [currentDate, setCurrentDate] = useState(new Date());
 
   useEffect(() => {
     if (loading) {
@@ -134,20 +135,63 @@ setRiskData(r);
           <Text style={styles.emptyTitle}>Engine is Warming Up</Text>
           <Text style={styles.emptySub}>We need at least 5 logs to calculate your clinical stability and disease risk patterns.</Text>
           <TouchableOpacity style={styles.startBtn} onPress={() => {
-              Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-              navigation.navigate('Scan');
-          }}>
+  Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+  setScanModalVisible(true);
+}}>
             <Text style={styles.startBtnText}>Start Your First Scan</Text>
           </TouchableOpacity>
-        </View>
-      </SafeAreaView>
-    );
+       </View>
+
+{/* 🔥 ADD THIS MODAL HERE */}
+<Modal
+  visible={scanModalVisible}
+  transparent
+  animationType="fade"
+>
+  <View style={styles.modalOverlay}>
+    <View style={styles.scanModal}>
+
+      <Text style={styles.scanTitle}>Choose Scan Method</Text>
+
+      <TouchableOpacity
+        style={styles.scanOption}
+        onPress={() => {
+          setScanModalVisible(false);
+          navigation.navigate('Camera', { userId });
+        }}
+      >
+        <MaterialCommunityIcons name="camera" size={22} color="#2E7D32" />
+        <Text style={styles.scanText}>Scan Food (Camera)</Text>
+      </TouchableOpacity>
+
+      <TouchableOpacity
+        style={styles.scanOption}
+        onPress={() => {
+          setScanModalVisible(false);
+          navigation.navigate('Scan', { userId });
+        }}
+      >
+        <MaterialCommunityIcons name="barcode-scan" size={22} color="#2E7D32" />
+        <Text style={styles.scanText}>Scan Barcode</Text>
+      </TouchableOpacity>
+
+      <TouchableOpacity onPress={() => setScanModalVisible(false)}>
+        <Text style={{ textAlign: "center", color: "#999", marginTop: 10 }}>
+          Cancel
+        </Text>
+      </TouchableOpacity>
+
+    </View>
+  </View>
+</Modal>
+
+</SafeAreaView>
+);
   }
 // ---------------- CALENDAR GENERATION ----------------
 
-const now = new Date();
-const year = now.getFullYear();
-const month = now.getMonth();
+const year = currentDate.getFullYear();
+const month = currentDate.getMonth();
 
 const firstDay = new Date(year, month, 1).getDay();
 const daysInMonth = new Date(year, month + 1, 0).getDate();
@@ -439,33 +483,47 @@ Tap on a highlighted day to view your achievement 🎉
 
     <View style={styles.calendarCard}>
 
-      {/* HEADER */}
-      <View style={styles.calendarHeader}>
+<View style={styles.calendarHeader}>
 
-        <Text style={styles.calendarTitle}>
-          March {new Date().getFullYear()}
-        </Text>
+  {/* LEFT BUTTON */}
+  <TouchableOpacity
+    onPress={() => {
+      const prev = new Date(currentDate);
+      prev.setMonth(prev.getMonth() - 1);
+      setCurrentDate(prev);
+    }}
+  >
+    <MaterialCommunityIcons name="chevron-left" size={24} color="#333" />
+  </TouchableOpacity>
 
-        <View style={{ flexDirection: "row", alignItems: "center" }}>
+  {/* TITLE */}
+  <Text style={styles.calendarTitle}>
+    {currentDate.toLocaleString("default", { month: "long" })} {year}
+  </Text>
 
-          <TouchableOpacity 
-            onPress={() => setInfoModalVisible(true)}
-            style={{ marginRight: 10 }}
-          >
-            <MaterialCommunityIcons 
-              name="information-outline" 
-              size={22} 
-              color="#2E7D32"
-            />
-          </TouchableOpacity>
+  {/* RIGHT SIDE (NEXT + CLOSE) */}
+  <View style={{ flexDirection: "row", alignItems: "center" }}>
 
-          <TouchableOpacity onPress={() => setCalendarVisible(false)}>
-            <MaterialCommunityIcons name="close" size={24} color="#333"/>
-          </TouchableOpacity>
+    {/* NEXT BUTTON */}
+    <TouchableOpacity
+      onPress={() => {
+        const next = new Date(currentDate);
+        next.setMonth(next.getMonth() + 1);
+        setCurrentDate(next);
+      }}
+      style={{ marginRight: 10 }}
+    >
+      <MaterialCommunityIcons name="chevron-right" size={24} color="#333" />
+    </TouchableOpacity>
 
-        </View>
+    {/* 🔥 CLOSE BUTTON (IMPORTANT) */}
+    <TouchableOpacity onPress={() => setCalendarVisible(false)}>
+      <MaterialCommunityIcons name="close" size={24} color="#333" />
+    </TouchableOpacity>
 
-      </View>
+  </View>
+
+</View>
 
       {/* WEEK LABELS */}
       <View style={styles.weekRow}>
@@ -591,6 +649,35 @@ const ToolCard = ({ icon, label, onPress }) => (
 );
 
 const styles = StyleSheet.create({
+  scanModal: {
+  backgroundColor: "#fff",
+  width: "85%",
+  padding: 25,
+  borderRadius: 25
+},
+
+scanTitle: {
+  fontSize: 18,
+  fontWeight: "bold",
+  textAlign: "center",
+  marginBottom: 20,
+  color: "#1B5E20"
+},
+
+scanOption: {
+  flexDirection: "row",
+  alignItems: "center",
+  padding: 15,
+  borderRadius: 15,
+  backgroundColor: "#F5F5F5",
+  marginBottom: 10
+},
+
+scanText: {
+  marginLeft: 10,
+  fontSize: 15,
+  fontWeight: "600"
+},
   toggleContainer: {
   flexDirection: 'row',
   backgroundColor: '#E8F5E9',

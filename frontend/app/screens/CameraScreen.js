@@ -1,12 +1,12 @@
 // FILE: app/screens/CameraScreen.js (FINAL CORRECTED VERSION)
-
-import React, { useRef } from 'react';
+import React, { useRef, useState } from 'react';
 import { View, StyleSheet, TouchableOpacity, Text, Button } from 'react-native';
 import { CameraView, useCameraPermissions } from 'expo-camera';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
+import * as ImageManipulator from 'expo-image-manipulator';
 
 const CameraScreen = ({ navigation, route }) => {
-
+const [loading, setLoading] = useState(false);
   const userId = route.params?.userId;
   console.log(" Camera userId:", userId);
 
@@ -28,8 +28,10 @@ const CameraScreen = ({ navigation, route }) => {
     );
   }
 
- const takePicture = async () => {
+const takePicture = async () => {
   if (!cameraRef.current) return;
+
+  setLoading(true); // 🔥 START LOADING
 
   try {
     const photo = await cameraRef.current.takePictureAsync();
@@ -41,6 +43,7 @@ const CameraScreen = ({ navigation, route }) => {
       type: "image/jpeg",
     });
     formData.append("userId", userId);
+
     const response = await fetch(
       "https://unsubscribed-brittney-superably.ngrok-free.dev/api/detect-food",
       {
@@ -55,22 +58,26 @@ const CameraScreen = ({ navigation, route }) => {
 
     const data = await response.json();
 
-console.log("FULL API RESPONSE:", data);
-console.log("FIRST DETECTION:", data.detections?.[0]);
-
-navigation.navigate("DetectionResult", {
-  detections: data.detections,
-  userId: userId
-});
+    navigation.navigate("DetectionResult", {
+      detections: data.detections,
+      fallback: data.fallback || false,
+      userId: userId
+    });
 
   } catch (error) {
     console.error("Detection error:", error);
     alert("Detection failed");
+  } finally {
+    setLoading(false); // 🔥 STOP LOADING
   }
 };
-
   return (
     <View style={styles.container}>
+      {loading && (
+  <View style={styles.loadingOverlay}>
+    <Text style={styles.loadingText}>Analyzing your food...</Text>
+  </View>
+)}
       <CameraView 
         style={styles.camera} 
         ref={cameraRef}
@@ -90,6 +97,23 @@ navigation.navigate("DetectionResult", {
 };
 
 const styles = StyleSheet.create({
+  loadingOverlay: {
+  position: "absolute",
+  top: 0,
+  left: 0,
+  right: 0,
+  bottom: 0,
+  backgroundColor: "rgba(0,0,0,0.6)",
+  justifyContent: "center",
+  alignItems: "center",
+  zIndex: 10
+},
+
+loadingText: {
+  color: "#fff",
+  fontSize: 18,
+  fontWeight: "600"
+},
   container: {
     flex: 1,
   },
